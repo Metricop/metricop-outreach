@@ -54,6 +54,33 @@ export interface Group {
   priority: number;
 }
 
+export interface Mailbox {
+  id: string;
+  email: string;
+  alias_email: string | null;
+  display_name: string | null;
+  signature: string | null;
+  market: "RS" | "SE";
+  daily_limit_new: number;
+  daily_limit_total: number;
+  per_run_limit: number;
+  send_hour_from: number;
+  send_hour_to: number;
+  timezone: string;
+  active: boolean;
+  test_mode: boolean;
+  test_email: string | null;
+  created_at: string;
+}
+
+export interface SequenceStep {
+  sequence_id: string;
+  step_no: number;
+  wait_days: number;
+  subject: string | null;
+  body: string;
+}
+
 export interface MailboxOption {
   id: string;
   email: string;

@@ -106,7 +106,7 @@ export function GroupsManager() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button variant="primary" onClick={() => { setError(null); setDraft({ ...EMPTY }); }}>
+        <Button variant="primary" onClick={() => { setError(null); setDraft({ ...EMPTY }); load(); }}>
           Nova grupa
         </Button>
       </div>
@@ -137,7 +137,7 @@ export function GroupsManager() {
             {groups.map((g) => (
               <tr
                 key={g.id}
-                onClick={() => { setError(null); setDraft({ ...g }); }}
+                onClick={() => { setError(null); setDraft({ ...g }); load(); }}
                 className="cursor-pointer border-b border-border last:border-0 hover:bg-background"
               >
                 <td className="px-4 py-3 font-medium">{g.code}</td>
