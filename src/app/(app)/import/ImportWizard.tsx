@@ -181,6 +181,8 @@ export function ImportWizard() {
 
       {error && <Notice kind="error">{error}</Notice>}
 
+      {phase === "upload" && <FileGuide />}
+
       {phase === "upload" && (
         <div className="rounded-xl border border-dashed border-border bg-surface p-8 text-center">
           <p className="text-sm text-muted">Izaberite CSV ili XLSX fajl. Prvi red mora biti zaglavlje sa nazivima kolona.</p>
@@ -316,6 +318,29 @@ export function ImportWizard() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function FileGuide() {
+  return (
+    <div className="rounded-xl border border-border bg-surface p-5 text-sm">
+      <p className="font-medium">Kako treba da izgleda fajl</p>
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-muted">
+        <li>Prvi red je zaglavlje: Firma, Ime, Email, Grad, Personalizacija, Izvor.</li>
+        <li>Jedan red = jedan kontakt. Email je obavezan, ostale kolone mogu biti prazne.</li>
+        <li>Ime je samo ime osobe (npr. Marko). Ako ga ne znate, ostavite prazno.</li>
+        <li>Personalizacija je jedna kratka rečenica za tu firmu. Prazna se ne prikazuje u mejlu.</li>
+        <li>Duplikati, neispravne adrese i adrese sa liste za izuzimanje se preskaču.</li>
+      </ul>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <a href="/primeri/primer-kontakti.xlsx" download className="rounded-lg border border-border px-3 py-2 font-medium text-accent hover:bg-background">
+          Preuzmi primer (Excel)
+        </a>
+        <a href="/primeri/primer-kontakti.csv" download className="rounded-lg border border-border px-3 py-2 font-medium text-accent hover:bg-background">
+          Preuzmi primer (CSV)
+        </a>
+      </div>
     </div>
   );
 }
