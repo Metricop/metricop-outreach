@@ -77,3 +77,12 @@ export function sendRaw(accessToken: string, raw: string, threadId?: string | nu
     body: JSON.stringify(threadId ? { raw, threadId } : { raw }),
   });
 }
+
+/** Message-ID zaglavlje poslate poruke (za In-Reply-To/References u sledećem koraku). */
+export async function getMessageIdHeader(accessToken: string, messageId: string): Promise<string | null> {
+  const msg = await gmail<{ payload?: { headers?: { name: string; value: string }[] } }>(
+    accessToken,
+    `messages/${messageId}?format=metadata&metadataHeaders=Message-ID`,
+  );
+  return msg.payload?.headers?.find((h) => h.name.toLowerCase() === "message-id")?.value ?? null;
+}

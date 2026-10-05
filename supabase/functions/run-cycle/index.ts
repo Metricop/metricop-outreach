@@ -1,16 +1,21 @@
-// Slanje mejlova. U Fazi 3: test slanje iz uređivača šablona ("Pošalji test meni").
-// Automatski krug (provera odgovora, follow-upovi, novi kontakti) dodaje se u Fazi 4.
+// Slanje mejlova.
+// - action "cycle": automatski krug za jedan mailbox, poziva ga pg_cron (zaglavlje x-cron-secret).
+// - action "test": test slanje iz uređivača šablona ("Pošalji test meni"), poziva prijavljeni član tima.
 
 import { GmailAuthError, refreshAccessToken, sendRaw } from "../_shared/gmail.ts";
 import { corsHeaders, createAdmin, getTeamUser, json } from "../_shared/http.ts";
 import { composeEmail, SAMPLE_VARS } from "../_shared/logic/compose.ts";
 import { base64Url, buildMime } from "../_shared/logic/mime.ts";
+import { runMailboxCycle } from "./cycle.ts";
+
+const LOCK_SECONDS = 600;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Nepoznat zahtev." }, 400);
   try {
     const body = await req.json().catch(() => ({}));
+    if (body.action === "cycle") return await cycle(req, body.mailbox_id);
     if (body.action === "test") return await testSend(req, body);
     return json({ error: "Nepoznata akcija." }, 400);
   } catch (e) {
@@ -19,6 +24,22 @@ Deno.serve(async (req) => {
     return json({ error: message }, e instanceof GmailAuthError ? 400 : 500);
   }
 });
+
+async function cycle(req: Request, mailboxId: string) {
+  const admin = createAdmin();
+  const { data: allowed } = await admin.rpc("verify_cron_secret", { p_secret: req.headers.get("x-cron-secret") ?? "" });
+  if (!allowed) return json({ error: "Zabranjeno." }, 403);
+
+  const { data: locked } = await admin.rpc("try_lock_mailbox", { p_mailbox_id: mailboxId, p_seconds: LOCK_SECONDS });
+  if (!locked) return json({ ok: true, skipped: "Krug za ovaj mailbox je već u toku." });
+  try {
+    const result = await runMailboxCycle(admin, mailboxId);
+    console.log(`run-cycle ${mailboxId}:`, JSON.stringify(result));
+    return json({ ok: true, ...result });
+  } finally {
+    await admin.rpc("unlock_mailbox", { p_mailbox_id: mailboxId });
+  }
+}
 
 interface TestBody {
   mailbox_id: string;

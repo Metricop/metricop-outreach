@@ -8,7 +8,7 @@ import { formatDateTime, type Mailbox } from "@/lib/types";
 import { HARD_DAILY_CAP } from "@logic/limits.ts";
 import { isValidEmail } from "@logic/email.ts";
 
-type Draft = Omit<Mailbox, "id" | "created_at"> & { id?: string };
+type Draft = Omit<Mailbox, "id" | "created_at" | "paused_reason"> & { id?: string };
 
 const TIMEZONES: Record<"RS" | "SE", string> = { RS: "Europe/Belgrade", SE: "Europe/Stockholm" };
 

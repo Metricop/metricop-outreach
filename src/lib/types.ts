@@ -70,6 +70,7 @@ export interface Mailbox {
   active: boolean;
   test_mode: boolean;
   test_email: string | null;
+  paused_reason: string | null;
   created_at: string;
 }
 
