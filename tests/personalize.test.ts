@@ -7,6 +7,7 @@ describe("personalizacija", () => {
     expect(p).toContain("Ne izmišljaj");
     expect(p).toContain("prazan string");
     expect(p).toContain("latinica");
+    expect(p).toContain("licence za rad RGZ");
     expect(systemPrompt("sv")).toContain("švedskom");
   });
 

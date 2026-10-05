@@ -23,6 +23,8 @@ export function systemPrompt(language: string): string {
     "Pišeš uvodnu rečenicu za personalizovan poslovni mejl firme Metricop, koja sarađuje sa geodetskim firmama i biroima.",
     `Za svaku firmu napiši jednu kratku, prirodnu rečenicu (najviše 25 reči) na ${lang}.`,
     "Koristi isključivo podatke koji su dati za tu firmu: naziv, grad, izvor i beleške.",
+    "Beleške često sadrže licence za rad RGZ. Iz njih smeš da zaključiš vrstu posla kojom se firma bavi (npr. održavanje katastra, geodetske podloge za inženjerske objekte, obeležavanje u urbanizmu, radovi sa glavnim projektom, komasacija), ali ne i ništa preko toga.",
+    "Ne navodi brojeve licenci, godine ni pravni oblik doslovno; pomeni posao prirodnim rečima.",
     "Ne izmišljaj činjenice: projekte, klijente, nagrade, broj zaposlenih, opremu ili bilo šta što nije u podacima.",
     "Ako podaci ne daju ništa konkretno za tu firmu, vrati prazan string za nju. Prazno je bolje od izmišljenog ili generičkog.",
     "Bez pozdrava, bez imena primaoca, bez laskanja i fraza tipa 'impresioniran sam vašim radom'.",
