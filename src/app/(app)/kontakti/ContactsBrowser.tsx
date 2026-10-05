@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { Button, Drawer, Notice, StatusBadge, inputClass } from "@/components/ui";
 import { eventLabel } from "@/lib/events";
 import { callFunction } from "@/lib/functions";
+import { MAX_PERSONALIZE } from "@/lib/personalize";
+import { PersonalizeReview } from "./PersonalizeReview";
 import { createClient } from "@/lib/supabase/client";
 import {
   CONTACT_STATUSES,
@@ -63,6 +65,7 @@ export function ContactsBrowser() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
+  const [personalizeFor, setPersonalizeFor] = useState<Contact[] | null>(null);
 
   const key = JSON.stringify({ filters, page, version });
   const contacts = result?.contacts ?? [];
@@ -185,6 +188,11 @@ export function ContactsBrowser() {
           onPause={() => bulkUpdate({ status: "paused" }, "Pauzirano")}
           onStatus={(s) => bulkUpdate({ status: s }, `Status „${STATUS_LABELS[s]}”`)}
           onDelete={bulkDelete}
+          onPersonalize={() => {
+            if (selected.size > MAX_PERSONALIZE) return setError(`Za predlog izaberite najviše ${MAX_PERSONALIZE} kontakata.`);
+            setError(null);
+            setPersonalizeFor(contacts.filter((c) => selected.has(c.id)));
+          }}
           onClear={() => setSelected(new Set())}
         />
       )}
@@ -267,6 +275,16 @@ export function ContactsBrowser() {
         </div>
       </div>
 
+      <PersonalizeReview
+        contacts={personalizeFor}
+        onClose={() => setPersonalizeFor(null)}
+        onSaved={(n) => {
+          setPersonalizeFor(null);
+          setMessage(`Sačuvana personalizacija: ${n}`);
+          reload();
+        }}
+      />
+
       <ContactPanel
         id={openId}
         groupCode={groupCode}
@@ -288,6 +306,7 @@ function BulkBar({
   onPause,
   onStatus,
   onDelete,
+  onPersonalize,
   onClear,
 }: {
   count: number;
@@ -296,6 +315,7 @@ function BulkBar({
   onPause: () => void;
   onStatus: (s: ContactStatus) => void;
   onDelete: () => void;
+  onPersonalize: () => void;
   onClear: () => void;
 }) {
   return (
@@ -327,6 +347,7 @@ function BulkBar({
           </option>
         ))}
       </select>
+      <Button onClick={onPersonalize}>Predloži personalizaciju</Button>
       <Button onClick={onPause}>Pauziraj</Button>
       <Button variant="danger" onClick={onDelete}>
         Obriši
