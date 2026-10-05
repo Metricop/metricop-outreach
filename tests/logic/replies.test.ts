@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyMessage, classifyThread, parseAddress } from "../../supabase/functions/_shared/logic/replies.ts";
+import { classifyMessage, classifyThread, evaluateNewMessages, parseAddress } from "@logic/replies.ts";
 
 const ours = ["nikola@metricop.com", "outreach@metricop.com"];
 
@@ -46,5 +46,40 @@ describe("classifyThread", () => {
 describe("parseAddress", () => {
   it("izvlači adresu", () => {
     expect(parseAddress('"Geo, Plan" <Info@GeoPlan.rs>')).toBe("info@geoplan.rs");
+  });
+});
+
+describe("evaluateNewMessages", () => {
+  const sent = { id: "m1", from: "Nikola <nikola@metricop.com>" };
+  it("samo naše poruke: ništa, ali pamti poslednju", () => {
+    expect(evaluateNewMessages([sent], ours, null)).toMatchObject({ outcome: "none", lastSeenId: "m1" });
+  });
+  it("odgovor posle naše poruke", () => {
+    const r = evaluateNewMessages([sent, { id: "m2", from: "marko@geo.rs", subject: "Re: X", snippet: "Hvala" }], ours, "m1");
+    expect(r.outcome).toBe("reply");
+    expect(r.message?.id).toBe("m2");
+    expect(r.lastSeenId).toBe("m2");
+  });
+  it("već viđen auto-odgovor se ne broji ponovo", () => {
+    const msgs = [sent, { id: "m2", from: "a@geo.rs", subject: "Out of office" }];
+    expect(evaluateNewMessages(msgs, ours, "m1").autoReplies).toHaveLength(1);
+    expect(evaluateNewMessages(msgs, ours, "m2")).toMatchObject({ outcome: "none", autoReplies: [] });
+  });
+  it("auto-odgovor pa pravi odgovor: odgovor odlučuje", () => {
+    const r = evaluateNewMessages(
+      [sent, { id: "m2", from: "a@geo.rs", autoSubmitted: "auto-replied" }, { id: "m3", from: "a@geo.rs", subject: "Re: X" }],
+      ours,
+      "m1",
+    );
+    expect(r.outcome).toBe("reply");
+    expect(r.message?.id).toBe("m3");
+    expect(r.autoReplies.map((m) => m.id)).toEqual(["m2"]);
+  });
+  it("bounce ima prednost", () => {
+    const r = evaluateNewMessages([sent, { id: "m2", from: "mailer-daemon@googlemail.com", subject: "Delivery Status Notification" }], ours, null);
+    expect(r).toMatchObject({ outcome: "bounce", message: { id: "m2" } });
+  });
+  it("ako poslednja viđena poruka više ne postoji, gleda celu nit", () => {
+    expect(evaluateNewMessages([sent, { id: "m2", from: "x@y.rs" }], ours, "obrisana").outcome).toBe("reply");
   });
 });

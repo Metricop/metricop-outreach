@@ -4,6 +4,8 @@ const EVENT_LABELS: Record<string, string> = {
   auto_reply: "Automatski odgovor",
   error: "Greška",
   finished: "Završeno bez odgovora",
+  skipped: "Preskočeno",
+  mailbox_paused: "Mailbox pauziran",
 };
 
 export function eventLabel(type: string): string {

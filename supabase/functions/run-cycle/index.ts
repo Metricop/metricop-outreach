@@ -1,8 +1,9 @@
 // Slanje mejlova.
 // - action "cycle": automatski krug za jedan mailbox, poziva ga pg_cron (zaglavlje x-cron-secret).
 // - action "test": test slanje iz uređivača šablona ("Pošalji test meni"), poziva prijavljeni član tima.
+// - action "thread": prepiska iz Gmail niti za panel kontakta (samo čitanje), poziva prijavljeni član tima.
 
-import { GmailAuthError, refreshAccessToken, sendRaw } from "../_shared/gmail.ts";
+import { getThreadFull, GmailAuthError, header, messageText, refreshAccessToken, sendRaw } from "../_shared/gmail.ts";
 import { corsHeaders, createAdmin, getTeamUser, json } from "../_shared/http.ts";
 import { composeEmail, SAMPLE_VARS } from "../_shared/logic/compose.ts";
 import { base64Url, buildMime } from "../_shared/logic/mime.ts";
@@ -17,6 +18,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     if (body.action === "cycle") return await cycle(req, body.mailbox_id);
     if (body.action === "test") return await testSend(req, body);
+    if (body.action === "thread") return await threadView(req, body.contact_id);
     return json({ error: "Nepoznata akcija." }, 400);
   } catch (e) {
     console.error(e);
@@ -91,4 +93,30 @@ async function testSend(req: Request, body: TestBody) {
   });
   await sendRaw(accessToken, base64Url(raw));
   return json({ ok: true, to: user.email });
+}
+
+async function threadView(req: Request, contactId: string) {
+  const admin = createAdmin();
+  const user = await getTeamUser(req, admin);
+  if (!user) return json({ error: "Niste prijavljeni nalogom metricop.com." }, 401);
+
+  const { data: contact } = await admin.from("contacts").select("gmail_thread_id, group_id").eq("id", contactId).single();
+  if (!contact?.gmail_thread_id) return json({ messages: [] });
+  const { data: group } = await admin.from("groups").select("mailbox_id").eq("id", contact.group_id).single();
+  if (!group?.mailbox_id) return json({ error: "Grupa kontakta nema mailbox." }, 400);
+
+  const { data: refreshToken } = await admin.rpc("get_mailbox_token", { p_mailbox_id: group.mailbox_id });
+  if (!refreshToken) return json({ error: "Mailbox nije povezan sa Gmailom." }, 400);
+  const accessToken = await refreshAccessToken(refreshToken);
+  const messages = await getThreadFull(accessToken, contact.gmail_thread_id);
+  return json({
+    messages: messages.map((m) => ({
+      id: m.id,
+      from: header(m, "From"),
+      to: header(m, "To"),
+      subject: header(m, "Subject"),
+      date: m.internalDate ? new Date(Number(m.internalDate)).toISOString() : null,
+      text: messageText(m).slice(0, 5000),
+    })),
+  });
 }

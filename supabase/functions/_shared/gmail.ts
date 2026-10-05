@@ -86,3 +86,89 @@ export async function getMessageIdHeader(accessToken: string, messageId: string)
   );
   return msg.payload?.headers?.find((h) => h.name.toLowerCase() === "message-id")?.value ?? null;
 }
+
+interface GmailHeader {
+  name: string;
+  value: string;
+}
+
+interface GmailPart {
+  mimeType?: string;
+  body?: { data?: string };
+  parts?: GmailPart[];
+  headers?: GmailHeader[];
+}
+
+export interface GmailMessage {
+  id: string;
+  internalDate?: string;
+  snippet?: string;
+  payload?: GmailPart;
+}
+
+export const header = (m: GmailMessage, name: string) =>
+  m.payload?.headers?.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? null;
+
+/** Niti sa bar jednom porukom koja nije naša u poslednjih N dana (kandidati za odgovor ili bounce). */
+export async function listThreadsWithIncoming(accessToken: string, days = 7, max = 1000): Promise<Set<string>> {
+  const ids = new Set<string>();
+  let pageToken: string | undefined;
+  do {
+    const q = new URLSearchParams({ q: `newer_than:${days}d -from:me`, maxResults: "500" });
+    if (pageToken) q.set("pageToken", pageToken);
+    const res = await gmail<{ threads?: { id: string }[]; nextPageToken?: string }>(accessToken, `threads?${q}`);
+    for (const t of res.threads ?? []) ids.add(t.id);
+    pageToken = res.nextPageToken;
+  } while (pageToken && ids.size < max);
+  return ids;
+}
+
+export async function getThreadMetadata(accessToken: string, threadId: string): Promise<GmailMessage[]> {
+  const q = new URLSearchParams({ format: "metadata" });
+  for (const h of ["From", "Subject", "Auto-Submitted"]) q.append("metadataHeaders", h);
+  const res = await gmail<{ messages?: GmailMessage[] }>(accessToken, `threads/${threadId}?${q}`);
+  return res.messages ?? [];
+}
+
+export async function getThreadFull(accessToken: string, threadId: string): Promise<GmailMessage[]> {
+  const res = await gmail<{ messages?: GmailMessage[] }>(accessToken, `threads/${threadId}?format=full`);
+  return res.messages ?? [];
+}
+
+function decodeBase64Url(data: string): string {
+  const bin = atob(data.replace(/-/g, "+").replace(/_/g, "/"));
+  return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+}
+
+/** Čisti tekst poruke (text/plain deo), ili izvod ako ga nema. */
+export function messageText(m: GmailMessage): string {
+  const find = (p?: GmailPart): string | null => {
+    if (!p) return null;
+    if (p.mimeType === "text/plain" && p.body?.data) return decodeBase64Url(p.body.data);
+    for (const c of p.parts ?? []) {
+      const t = find(c);
+      if (t) return t;
+    }
+    return null;
+  };
+  return (find(m.payload) ?? m.snippet ?? "").trim();
+}
+
+/** Id labele, pravi je ako ne postoji. */
+export async function ensureLabel(accessToken: string, name: string): Promise<string> {
+  const res = await gmail<{ labels?: { id: string; name: string }[] }>(accessToken, "labels");
+  const found = res.labels?.find((l) => l.name === name);
+  if (found) return found.id;
+  const created = await gmail<{ id: string }>(accessToken, "labels", {
+    method: "POST",
+    body: JSON.stringify({ name, labelListVisibility: "labelShow", messageListVisibility: "show" }),
+  });
+  return created.id;
+}
+
+export function addThreadLabel(accessToken: string, threadId: string, labelId: string) {
+  return gmail(accessToken, `threads/${threadId}/modify`, {
+    method: "POST",
+    body: JSON.stringify({ addLabelIds: [labelId] }),
+  });
+}

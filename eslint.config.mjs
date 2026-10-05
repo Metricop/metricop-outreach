@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Deno Edge funkcije (proverava ih `deno check`); čista logika u _shared/logic ostaje pod lintom.
+    "supabase/functions/run-cycle/**",
+    "supabase/functions/gmail-oauth/**",
+    "supabase/functions/_shared/*.ts",
   ]),
 ]);
 

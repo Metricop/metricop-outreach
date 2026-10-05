@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button, Drawer, Notice, StatusBadge, inputClass } from "@/components/ui";
 import { eventLabel } from "@/lib/events";
+import { callFunction } from "@/lib/functions";
 import { createClient } from "@/lib/supabase/client";
 import {
   CONTACT_STATUSES,
@@ -430,11 +431,11 @@ function ContactPanel({
 
           <section>
             <h3 className="mb-2 text-sm font-semibold">Prepiska iz Gmaila</h3>
-            <p className="text-sm text-muted">
-              {contact.gmail_thread_id
-                ? "Prikaz prepiske dolazi u Fazi 5."
-                : "Kontaktu još nije poslat nijedan mejl."}
-            </p>
+            {contact.gmail_thread_id ? (
+              <ThreadView contactId={contact.id} />
+            ) : (
+              <p className="text-sm text-muted">Kontaktu još nije poslat nijedan mejl.</p>
+            )}
           </section>
 
           <section className="border-t border-border pt-4">
@@ -446,5 +447,45 @@ function ContactPanel({
         </div>
       )}
     </Drawer>
+  );
+}
+
+interface ThreadMessage {
+  id: string;
+  from: string | null;
+  subject: string | null;
+  date: string | null;
+  text: string;
+}
+
+function ThreadView({ contactId }: { contactId: string }) {
+  const [state, setState] = useState<{ id: string; messages?: ThreadMessage[]; error?: string } | null>(null);
+  const current = state?.id === contactId ? state : null;
+
+  useEffect(() => {
+    let alive = true;
+    callFunction<{ messages: ThreadMessage[] }>("run-cycle", { action: "thread", contact_id: contactId })
+      .then((r) => alive && setState({ id: contactId, messages: r.messages }))
+      .catch((e) => alive && setState({ id: contactId, error: e instanceof Error ? e.message : "Greška" }));
+    return () => {
+      alive = false;
+    };
+  }, [contactId]);
+
+  if (!current) return <p className="text-sm text-muted">Učitavanje prepiske…</p>;
+  if (current.error) return <p className="text-sm text-danger">{current.error}</p>;
+  if (!current.messages?.length) return <p className="text-sm text-muted">Nit je prazna.</p>;
+  return (
+    <ul className="space-y-2 text-sm">
+      {current.messages.map((m) => (
+        <li key={m.id} className="rounded-lg border border-border px-3 py-2">
+          <div className="flex flex-wrap justify-between gap-2 text-xs text-muted">
+            <span className="break-all">{m.from}</span>
+            <span>{formatDateTime(m.date)}</span>
+          </div>
+          <p className="mt-2 max-h-60 overflow-y-auto whitespace-pre-wrap break-words">{m.text}</p>
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -54,3 +54,37 @@ export function classifyThread(
   if (kinds.includes("auto_reply")) return "auto_reply";
   return "none";
 }
+
+export interface ThreadMessage extends MessageHeaders {
+  id: string;
+  snippet?: string | null;
+}
+
+export interface ThreadEvaluation {
+  outcome: "bounce" | "reply" | "auto_reply" | "none";
+  /** Poruka koja je odlučila (bounce ili poslednji pravi odgovor). */
+  message: ThreadMessage | null;
+  autoReplies: ThreadMessage[];
+  /** Poslednja pregledana poruka u niti; sledeći krug gleda samo novije. */
+  lastSeenId: string | null;
+}
+
+/** Ocena poruka u niti koje su stigle posle poslednje pregledane. */
+export function evaluateNewMessages(
+  messages: ThreadMessage[],
+  ourAddresses: string[],
+  lastSeenId: string | null,
+): ThreadEvaluation {
+  const idx = lastSeenId ? messages.findIndex((m) => m.id === lastSeenId) : -1;
+  const fresh = messages.slice(idx + 1).map((m) => ({ m, kind: classifyMessage(m, ourAddresses) }));
+  const bounce = fresh.find((x) => x.kind === "bounce");
+  const replies = fresh.filter((x) => x.kind === "reply");
+  const autoReplies = fresh.filter((x) => x.kind === "auto_reply").map((x) => x.m);
+  const outcome = bounce ? "bounce" : replies.length ? "reply" : autoReplies.length ? "auto_reply" : "none";
+  return {
+    outcome,
+    message: bounce?.m ?? replies.at(-1)?.m ?? null,
+    autoReplies,
+    lastSeenId: messages.at(-1)?.id ?? lastSeenId,
+  };
+}
