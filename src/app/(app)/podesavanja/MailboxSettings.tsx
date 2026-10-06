@@ -182,7 +182,7 @@ export function MailboxSettings({ gmailStatus }: { gmailStatus: { ok: boolean; r
         {draft && (
           <div className="space-y-4">
             {error && <Notice kind="error">{error}</Notice>}
-            <Field label="Gmail nalog" hint="Adresa Google Workspace naloga koji se povezuje (npr. nikola@metricop.com).">
+            <Field label="Gmail nalog" hint="Adresa Google Workspace naloga koji se povezuje (npr. nikola@metricop-geo.com).">
               <input className={inputClass} value={draft.email} disabled={!!draft.id} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
             </Field>
             <Field label="Alias (opciono)" hint="Ako šaljete sa aliasa podešenog u Gmailu (Send mail as). Inače ostavite prazno.">
