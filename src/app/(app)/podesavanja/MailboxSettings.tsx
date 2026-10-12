@@ -4,13 +4,22 @@ import { useCallback, useEffect, useState } from "react";
 import { Button, Drawer, Field, Notice, inputClass } from "@/components/ui";
 import { callFunction } from "@/lib/functions";
 import { createClient } from "@/lib/supabase/client";
-import { formatDateTime, type Mailbox } from "@/lib/types";
+import { formatDateTime, MARKET_LABELS, type Mailbox, type Market } from "@/lib/types";
 import { HARD_DAILY_CAP } from "@logic/limits.ts";
 import { isValidEmail } from "@logic/email.ts";
 
 type Draft = Omit<Mailbox, "id" | "created_at" | "paused_reason"> & { id?: string };
 
-const TIMEZONES: Record<"RS" | "SE", string> = { RS: "Europe/Belgrade", SE: "Europe/Stockholm" };
+const TIMEZONES: Record<Market, string> = { RS: "Europe/Belgrade", SE: "Europe/Stockholm", US: "America/Chicago" };
+
+const TIMEZONE_OPTIONS = [
+  "Europe/Belgrade",
+  "Europe/Stockholm",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+];
 
 const EMPTY: Draft = {
   email: "",
@@ -147,7 +156,7 @@ export function MailboxSettings({ gmailStatus }: { gmailStatus: { ok: boolean; r
                 <div className="min-w-0">
                   <p className="truncate font-medium">{m.alias_email || m.email}</p>
                   <p className="text-xs text-muted">
-                    {m.market === "RS" ? "Srbija" : "Švedska"} · {m.display_name || "bez imena pošiljaoca"}
+                    {MARKET_LABELS[m.market]} · {m.display_name || "bez imena pošiljaoca"}
                     {m.alias_email ? ` · nalog ${m.email}` : ""}
                   </p>
                 </div>
@@ -200,18 +209,22 @@ export function MailboxSettings({ gmailStatus }: { gmailStatus: { ok: boolean; r
                   className={inputClass}
                   value={draft.market}
                   onChange={(e) => {
-                    const market = e.target.value as "RS" | "SE";
+                    const market = e.target.value as Market;
                     setDraft({ ...draft, market, timezone: TIMEZONES[market] });
                   }}
                 >
                   <option value="RS">Srbija</option>
                   <option value="SE">Švedska</option>
+                  <option value="US">SAD</option>
                 </select>
               </Field>
               <Field label="Vremenska zona">
                 <select className={inputClass} value={draft.timezone} onChange={(e) => setDraft({ ...draft, timezone: e.target.value })}>
-                  <option value="Europe/Belgrade">Europe/Belgrade</option>
-                  <option value="Europe/Stockholm">Europe/Stockholm</option>
+                  {TIMEZONE_OPTIONS.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz}
+                    </option>
+                  ))}
                 </select>
               </Field>
               <Field label="Šalje od (sat)">

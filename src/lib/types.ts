@@ -54,13 +54,17 @@ export interface Group {
   priority: number;
 }
 
+export type Market = "RS" | "SE" | "US";
+
+export const MARKET_LABELS: Record<Market, string> = { RS: "Srbija", SE: "Švedska", US: "SAD" };
+
 export interface Mailbox {
   id: string;
   email: string;
   alias_email: string | null;
   display_name: string | null;
   signature: string | null;
-  market: "RS" | "SE";
+  market: Market;
   daily_limit_new: number;
   daily_limit_total: number;
   per_run_limit: number;
@@ -86,7 +90,7 @@ export interface MailboxOption {
   id: string;
   email: string;
   display_name: string | null;
-  market: "RS" | "SE";
+  market: Market;
 }
 
 export interface SequenceOption {
