@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button, Drawer, Field, Notice, inputClass } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
-import type { Group, MailboxOption, SequenceOption } from "@/lib/types";
+import { TIMEZONE_OPTIONS, type Group, type MailboxOption, type SequenceOption } from "@/lib/types";
 
 type Draft = Omit<Group, "id"> & { id?: string };
 
@@ -15,6 +15,10 @@ const EMPTY: Draft = {
   sequence_id: null,
   active: false,
   priority: 100,
+  signature: null,
+  timezone: null,
+  send_hour_from: null,
+  send_hour_to: null,
 };
 
 async function fetchGroupsData() {
@@ -70,6 +74,10 @@ export function GroupsManager() {
     const code = draft.code.trim().toUpperCase();
     const name = draft.name.trim();
     if (!code || !name) return setError("Šifra i naziv su obavezni.");
+    const from = draft.send_hour_from ?? null;
+    const to = draft.send_hour_to ?? null;
+    if ((from === null) !== (to === null)) return setError("Radno vreme grupe: popunite i početak i kraj, ili ostavite oba prazna.");
+    if (from !== null && to !== null && from >= to) return setError("Radno vreme grupe: početak mora biti pre kraja.");
     setSaving(true);
     const row = {
       code,
@@ -79,6 +87,10 @@ export function GroupsManager() {
       sequence_id: draft.sequence_id || null,
       active: draft.active,
       priority: Number(draft.priority) || 0,
+      signature: draft.signature?.trim() || null,
+      timezone: draft.timezone || null,
+      send_hour_from: from,
+      send_hour_to: to,
     };
     const res = draft.id
       ? await supabase.from("groups").update(row).eq("id", draft.id)
@@ -208,6 +220,52 @@ export function GroupsManager() {
                 onChange={(e) => setDraft({ ...draft, priority: Number(e.target.value) })}
               />
             </Field>
+            <div className="space-y-3 rounded-xl border border-border p-3">
+              <p className="text-sm font-medium">Posebno za ovu grupu</p>
+              <p className="text-xs text-muted">Prazno polje znači da važi isto što i za mailbox. Koristi se kad isti nalog šalje drugom tržištu, npr. SAD.</p>
+              <Field label="Potpis grupe">
+                <textarea
+                  className={inputClass}
+                  rows={4}
+                  value={draft.signature ?? ""}
+                  onChange={(e) => setDraft({ ...draft, signature: e.target.value })}
+                />
+              </Field>
+              <Field label="Vremenska zona grupe">
+                <select className={inputClass} value={draft.timezone ?? ""} onChange={(e) => setDraft({ ...draft, timezone: e.target.value || null })}>
+                  <option value="">— kao mailbox —</option>
+                  {TIMEZONE_OPTIONS.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Šalje od (sat)">
+                  <input
+                    type="number"
+                    min={0}
+                    max={23}
+                    className={inputClass}
+                    placeholder="kao mailbox"
+                    value={draft.send_hour_from ?? ""}
+                    onChange={(e) => setDraft({ ...draft, send_hour_from: e.target.value === "" ? null : Number(e.target.value) })}
+                  />
+                </Field>
+                <Field label="Šalje do (sat)">
+                  <input
+                    type="number"
+                    min={1}
+                    max={24}
+                    className={inputClass}
+                    placeholder="kao mailbox"
+                    value={draft.send_hour_to ?? ""}
+                    onChange={(e) => setDraft({ ...draft, send_hour_to: e.target.value === "" ? null : Number(e.target.value) })}
+                  />
+                </Field>
+              </div>
+            </div>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} />
               Aktivna (kontakti iz ove grupe se šalju)

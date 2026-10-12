@@ -6,6 +6,7 @@
 import { getThreadFull, GmailAuthError, header, messageText, refreshAccessToken, sendRaw } from "../_shared/gmail.ts";
 import { corsHeaders, createAdmin, getTeamUser, json } from "../_shared/http.ts";
 import { composeEmail, SAMPLE_VARS } from "../_shared/logic/compose.ts";
+import { effectiveSignature } from "../_shared/logic/groupSettings.ts";
 import { base64Url, buildMime } from "../_shared/logic/mime.ts";
 import { runMailboxCycle } from "./cycle.ts";
 
@@ -48,6 +49,7 @@ interface TestBody {
   sequence_id: string;
   step_no: number;
   contact_id?: string | null;
+  group_id?: string | null;
 }
 
 async function testSend(req: Request, body: TestBody) {
@@ -63,11 +65,19 @@ async function testSend(req: Request, body: TestBody) {
   const step = steps?.find((s) => s.step_no === Number(body.step_no));
   if (!step) return json({ error: "Korak ne postoji. Sačuvajte sekvencu pa probajte ponovo." }, 400);
 
+  // Potpis kao u pravom slanju: grupa koja šalje ovu sekvencu iz ovog mailboxa, ili grupa kontakta.
+  let groupId = body.group_id ?? null;
   let vars = SAMPLE_VARS;
   if (body.contact_id) {
     const { data: c } = await admin.from("contacts").select("*").eq("id", body.contact_id).single();
     if (c) vars = { ime: c.first_name, firma: c.company, grad: c.city, personalizacija: c.personalization };
+    if (c && !groupId) groupId = c.group_id;
   }
+  const groupQuery = admin.from("groups").select("id, mailbox_id, sequence_id, signature");
+  const { data: candidates } = groupId
+    ? await groupQuery.eq("id", groupId)
+    : await groupQuery.eq("mailbox_id", mailbox.id).eq("sequence_id", body.sequence_id).order("priority");
+  const group = (candidates ?? []).find((g) => g.mailbox_id === mailbox.id && g.sequence_id === body.sequence_id) ?? null;
 
   const email = composeEmail({
     stepNo: step.step_no,
@@ -75,7 +85,7 @@ async function testSend(req: Request, body: TestBody) {
     body: step.body,
     firstSubject: steps!.find((s) => s.step_no === 1)?.subject ?? null,
     vars,
-    signature: mailbox.signature,
+    signature: effectiveSignature(mailbox, group),
     testMode: true,
   });
 
