@@ -12,7 +12,7 @@ describe("composeEmail", () => {
     const e = composeEmail({ ...base, stepNo: 1, subject: "Saradnja za {{firma}}", body: "Zdravo, {{ime}},\n\n{{personalizacija}}\nPišem iz Metricopa." });
     expect(e.subject).toBe("Saradnja za Geo Plan");
     expect(e.text).toBe("Zdravo, Marko,\n\nPišem iz Metricopa.\n\nNikola\nMetricop");
-    expect(e.html).toContain("<p>Nikola<br>Metricop</p>");
+    expect(e.html).toContain('<p style="color:#222222">Nikola<br>Metricop</p>');
   });
   it("follow-up dobija Re: i naslov prvog koraka", () => {
     const e = composeEmail({ ...base, stepNo: 2, subject: "ignorisano", body: "Samo da proverim." });
@@ -30,7 +30,20 @@ describe("composeEmail", () => {
 describe("textToHtml", () => {
   it("escape i pasusi, bez slika", () => {
     expect(textToHtml("A <b> & B\nC\n\nD")).toBe(
-      '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5"><p>A &lt;b&gt; &amp; B<br>C</p><p>D</p></div>',
+      '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#222222"><p style="color:#222222">A &lt;b&gt; &amp; B<br>C</p><p style="color:#222222">D</p></div>',
     );
+  });
+
+  it("linkovi u potpisu i tekstu vode na https, adresa na mailto", () => {
+    const html = textToHtml(
+      "Specs: https://metricop.com/collections/handheld-lidar-scanners.\n\nnikola@metricop.com | metricop.com\nwww.metricop.rs",
+    );
+    expect(html).toContain('<a href="https://metricop.com/collections/handheld-lidar-scanners">https://metricop.com/collections/handheld-lidar-scanners</a>.');
+    expect(html).toContain('<a href="mailto:nikola@metricop.com">nikola@metricop.com</a> | <a href="https://metricop.com">metricop.com</a>');
+    expect(html).toContain('<a href="https://www.metricop.rs">www.metricop.rs</a>');
+  });
+
+  it("ne pravi link od reči sa tačkom koje nisu domen", () => {
+    expect(textToHtml("Kralja Stefana 6. Niš, Srbija")).not.toContain("<a ");
   });
 });

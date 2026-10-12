@@ -22,14 +22,30 @@ export interface ComposedEmail {
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-/** Jednostavan HTML: pasusi i prelomi redova, bez slika, stilova za praćenje ili prepravljenih linkova. */
+// Adresa, pun link ili goli domen (metricop.com, www.metricop.com/putanja). Link vodi tačno na ono što piše,
+// sa https, da Gmail ne bi sam pravio http://www… linkove.
+const LINK_RE =
+  /([\w.+-]+@[\w-]+(?:\.[\w-]+)+)|(https?:\/\/[^\s<]+[^\s<.,;:!?)])|(?<![\w@./-])((?:www\.)?[a-z0-9-]+\.(?:com|rs|se|net|org|io)(?:\/[^\s<]*[^\s<.,;:!?)])?)(?![\w@-])/gi;
+
+function linkify(escaped: string): string {
+  return escaped.replace(LINK_RE, (m, email, url, domain) => {
+    if (email) return `<a href="mailto:${email}">${email}</a>`;
+    if (url) return `<a href="${url}">${url}</a>`;
+    return `<a href="https://${domain}">${domain}</a>`;
+  });
+}
+
+/**
+ * Jednostavan HTML: pasusi, prelomi redova i linkovi, bez slika ili stilova za praćenje.
+ * Boja je zadata na svakom pasusu da Gmail ne bi prikazao potpis sivim slovima.
+ */
 export function textToHtml(text: string): string {
   const paragraphs = text
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean)
-    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`);
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5">${paragraphs.join("")}</div>`;
+    .map((p) => `<p style="color:#222222">${linkify(escapeHtml(p)).replace(/\n/g, "<br>")}</p>`);
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#222222">${paragraphs.join("")}</div>`;
 }
 
 export function composeEmail(input: ComposeInput): ComposedEmail {
