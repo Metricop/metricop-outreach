@@ -73,11 +73,13 @@ async function testSend(req: Request, body: TestBody) {
     if (c) vars = { ime: c.first_name, firma: c.company, grad: c.city, personalizacija: c.personalization };
     if (c && !groupId) groupId = c.group_id;
   }
-  const groupQuery = admin.from("groups").select("id, mailbox_id, sequence_id, signature");
-  const { data: candidates } = groupId
-    ? await groupQuery.eq("id", groupId)
-    : await groupQuery.eq("mailbox_id", mailbox.id).eq("sequence_id", body.sequence_id).order("priority");
-  const group = (candidates ?? []).find((g) => g.mailbox_id === mailbox.id && g.sequence_id === body.sequence_id) ?? null;
+  const { data: senders } = await admin
+    .from("groups")
+    .select("id, signature")
+    .eq("mailbox_id", mailbox.id)
+    .eq("sequence_id", body.sequence_id)
+    .order("priority");
+  const group = senders?.find((g) => g.id === groupId) ?? senders?.[0] ?? null;
 
   const email = composeEmail({
     stepNo: step.step_no,
