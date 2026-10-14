@@ -81,6 +81,19 @@ async function testSend(req: Request, body: TestBody) {
     .order("priority");
   const group = senders?.find((g) => g.id === groupId) ?? senders?.[0] ?? null;
 
+  // Bez izabranog kontakta: pravi kontakt iz grupe, da test bude na jeziku kampanje (srpski primer samo ako grupa nema kontakata).
+  if (!body.contact_id && group) {
+    const { data: sample } = await admin
+      .from("contacts")
+      .select("first_name, company, city, personalization")
+      .eq("group_id", group.id)
+      .not("personalization", "is", null)
+      .order("created_at")
+      .limit(1)
+      .maybeSingle();
+    if (sample) vars = { ime: sample.first_name, firma: sample.company, grad: sample.city, personalizacija: sample.personalization };
+  }
+
   const email = composeEmail({
     stepNo: step.step_no,
     subject: step.subject,
