@@ -46,4 +46,18 @@ describe("textToHtml", () => {
   it("ne pravi link od reči sa tačkom koje nisu domen", () => {
     expect(textToHtml("Kralja Stefana 6. Niš, Srbija")).not.toContain("<a ");
   });
+
+  it("link sa imenom: čitalac vidi ime, link vodi na punu adresu", () => {
+    const html = textToHtml("See [the Trion lineup](https://metricop.com/lp/fjd/lidar?utm_source=email&utm_campaign=x) here.");
+    expect(html).toContain('See <a href="https://metricop.com/lp/fjd/lidar?utm_source=email&amp;utm_campaign=x">the Trion lineup</a> here.');
+    expect(html).not.toContain(">https://");
+  });
+});
+
+describe("link sa imenom u tekstualnoj verziji", () => {
+  it("postaje ime (adresa)", () => {
+    const e = composeEmail({ ...base, signature: "", stepNo: 2, subject: null, body: "Look at [the page](https://metricop.com/lp) please." });
+    expect(e.text).toBe("Look at the page (https://metricop.com/lp) please.");
+    expect(e.html).toContain('<a href="https://metricop.com/lp">the page</a>');
+  });
 });

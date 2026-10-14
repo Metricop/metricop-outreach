@@ -27,6 +27,25 @@ const escapeHtml = (s: string) =>
 const LINK_RE =
   /([\w.+-]+@[\w-]+(?:\.[\w-]+)+)|(https?:\/\/[^\s<]+[^\s<.,;:!?)])|(?<![\w@./-])((?:www\.)?[a-z0-9-]+\.(?:com|rs|se|net|org|io)(?:\/[^\s<]*[^\s<.,;:!?)])?)(?![\w@-])/gi;
 
+// Link sa imenom, kao u Markdown-u: [pogledajte modele](https://metricop.com/...). Čitalac vidi samo ime.
+const NAMED_LINK_RE = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g;
+
+/** Tekstualna verzija: [ime](adresa) postaje "ime (adresa)". */
+export function namedLinksToPlain(text: string): string {
+  return text.replace(NAMED_LINK_RE, (_m, label, url) => `${label} (${url})`);
+}
+
+function linkifyWithNamed(raw: string): string {
+  let out = "";
+  let last = 0;
+  for (const m of raw.matchAll(NAMED_LINK_RE)) {
+    out += linkify(escapeHtml(raw.slice(last, m.index)));
+    out += `<a href="${escapeHtml(m[2])}">${escapeHtml(m[1])}</a>`;
+    last = m.index! + m[0].length;
+  }
+  return out + linkify(escapeHtml(raw.slice(last)));
+}
+
 function linkify(escaped: string): string {
   return escaped.replace(LINK_RE, (m, email, url, domain) => {
     if (email) return `<a href="mailto:${email}">${email}</a>`;
@@ -44,7 +63,7 @@ export function textToHtml(text: string): string {
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean)
-    .map((p) => `<p style="color:#222222">${linkify(escapeHtml(p)).replace(/\n/g, "<br>")}</p>`);
+    .map((p) => `<p style="color:#222222">${linkifyWithNamed(p).replace(/\n/g, "<br>")}</p>`);
   return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#222222">${paragraphs.join("")}</div>`;
 }
 
@@ -56,9 +75,9 @@ export function composeEmail(input: ComposeInput): ComposedEmail {
 
   const body = renderTemplate(input.body, input.vars).trim();
   const signature = (input.signature ?? "").trim();
-  const text = signature ? `${body}\n\n${signature}` : body;
+  const full = signature ? `${body}\n\n${signature}` : body;
 
-  return { subject, text, html: textToHtml(text) };
+  return { subject, text: namedLinksToPlain(full), html: textToHtml(full) };
 }
 
 /** Podaci za pregled i test slanje kad nije izabran pravi kontakt. */
