@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { Notice } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
+import { MARKET_LABELS, type Market } from "@/lib/types";
 
 export interface MailboxSwitch {
   id: string;
   email: string;
   alias_email: string | null;
-  market: "RS" | "SE";
+  market: Market;
   active: boolean;
   test_mode: boolean;
   test_email: string | null;
@@ -51,7 +52,7 @@ export function MailboxSwitches({ initial }: { initial: MailboxSwitch[] }) {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate font-medium">{m.alias_email || m.email}</p>
-                <p className="text-xs text-muted">{m.market === "RS" ? "Srbija" : "Švedska"}</p>
+                <p className="text-xs text-muted">{MARKET_LABELS[m.market]}</p>
               </div>
               <button
                 type="button"

@@ -22,14 +22,78 @@ export interface ComposedEmail {
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-/** Jednostavan HTML: pasusi i prelomi redova, bez slika, stilova za praćenje ili prepravljenih linkova. */
+// Adresa, pun link ili goli domen (metricop.com, www.metricop.com/putanja). Link vodi tačno na ono što piše,
+// sa https, da Gmail ne bi sam pravio http://www… linkove.
+const LINK_RE =
+  /([\w.+-]+@[\w-]+(?:\.[\w-]+)+)|(https?:\/\/[^\s<]+[^\s<.,;:!?)])|(?<![\w@./-])((?:www\.)?[a-z0-9-]+\.(?:com|rs|se|net|org|io)(?:\/[^\s<]*[^\s<.,;:!?)])?)(?![\w@-])/gi;
+
+// Link sa imenom, kao u Markdown-u: [pogledajte modele](https://metricop.com/...). Čitalac vidi samo ime.
+const NAMED_LINK_RE = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g;
+
+/** Tekstualna verzija: [ime](adresa) postaje "ime (adresa)". */
+export function namedLinksToPlain(text: string): string {
+  return text.replace(NAMED_LINK_RE, (_m, label, url) => `${label} (${url})`);
+}
+
+function linkifyWithNamed(raw: string): string {
+  let out = "";
+  let last = 0;
+  for (const m of raw.matchAll(NAMED_LINK_RE)) {
+    out += linkify(escapeHtml(raw.slice(last, m.index)));
+    out += `<a href="${escapeHtml(m[2])}">${escapeHtml(m[1])}</a>`;
+    last = m.index! + m[0].length;
+  }
+  return out + linkify(escapeHtml(raw.slice(last)));
+}
+
+function linkify(escaped: string): string {
+  return escaped.replace(LINK_RE, (m, email, url, domain) => {
+    if (email) return `<a href="mailto:${email}">${email}</a>`;
+    if (url) return `<a href="${url}">${url}</a>`;
+    return `<a href="https://${domain}">${domain}</a>`;
+  });
+}
+
+/**
+ * Jednostavan HTML: pasusi, prelomi redova i linkovi, bez slika ili stilova za praćenje.
+ * Boja je zadata na svakom pasusu da Gmail ne bi prikazao potpis sivim slovima.
+ */
 export function textToHtml(text: string): string {
   const paragraphs = text
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean)
-    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`);
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5">${paragraphs.join("")}</div>`;
+    .map((p) => `<p style="color:#222222">${linkifyWithNamed(p).replace(/\n/g, "<br>")}</p>`);
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#222222">${paragraphs.join("")}</div>`;
+}
+
+// Potpis podržava i malo oblikovanja: **podebljano** i red sa slikom ![logo](https://...).
+const IMAGE_LINE_RE = /^!\[([^\]\n]*)\]\((https:\/\/[^\s)]+)\)$/;
+const BOLD_RE = /\*\*([^*\n]+)\*\*/g;
+
+/** Tekstualna verzija potpisa: bez zvezdica i bez reda sa slikom. */
+export function signatureToPlain(signature: string): string {
+  return signature
+    .split("\n")
+    .filter((line) => !IMAGE_LINE_RE.test(line.trim()))
+    .join("\n")
+    .replace(BOLD_RE, "$1")
+    .trim();
+}
+
+/** HTML potpis: zbijeni redovi (kao u Gmail potpisu), podebljano, linkovi i logo. */
+export function signatureToHtml(signature: string): string {
+  const lines = signature.split("\n").map((line) => {
+    const t = line.trim();
+    if (!t) return "<br>";
+    const img = t.match(IMAGE_LINE_RE);
+    if (img) return `<div><img src="${escapeHtml(img[2])}" alt="${escapeHtml(img[1])}" width="96" style="max-width:100%"></div>`;
+    let html = linkifyWithNamed(t).replace(BOLD_RE, "<strong>$1</strong>");
+    // Red bez linka (adresa, Org.nr): nevidljivi znak između cifara sprečava da Gmail sam napravi plavi link ka mapi.
+    if (!html.includes("<a ")) html = html.replace(/(\d)(?=\d)/g, "$1&zwnj;");
+    return `<div>${html}</div>`;
+  });
+  return `<div style="color:#222222;margin-top:14px">${lines.join("")}</div>`;
 }
 
 export function composeEmail(input: ComposeInput): ComposedEmail {
@@ -40,9 +104,11 @@ export function composeEmail(input: ComposeInput): ComposedEmail {
 
   const body = renderTemplate(input.body, input.vars).trim();
   const signature = (input.signature ?? "").trim();
-  const text = signature ? `${body}\n\n${signature}` : body;
+  const text = signature ? `${body}\n\n${signatureToPlain(signature)}` : body;
+  let html = textToHtml(body);
+  if (signature) html = html.replace(/<\/div>$/, `${signatureToHtml(signature)}</div>`);
 
-  return { subject, text, html: textToHtml(text) };
+  return { subject, text: namedLinksToPlain(text), html };
 }
 
 /** Podaci za pregled i test slanje kad nije izabran pravi kontakt. */

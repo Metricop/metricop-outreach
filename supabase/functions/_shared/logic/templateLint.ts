@@ -3,7 +3,7 @@
 export const KNOWN_FIELDS = ["ime", "firma", "grad", "personalizacija"];
 
 const UNSUBSCRIBE_RE =
-  /odjav|unsubscribe|ne želite|ne zelite|ne zanima|avregistr|avprenumer|avsluta|inte (vill|längre|är intresserad)|opt[- ]?out/i;
+  /odjav|unsubscribe|ne želite|ne zelite|ne zanima|avregistr|avprenumer|avsluta|inte (vill|längre|är intresserad)|opt[- ]?out|won't (write|email|follow up|reach out)|not (your area|relevant|interested)/i;
 const LINK_RE = /(https?:\/\/|www\.)[^\s<>"]+/gi;
 
 export interface LintInput {

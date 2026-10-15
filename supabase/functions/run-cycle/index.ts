@@ -6,6 +6,7 @@
 import { getThreadFull, GmailAuthError, header, messageText, refreshAccessToken, sendRaw } from "../_shared/gmail.ts";
 import { corsHeaders, createAdmin, getTeamUser, json } from "../_shared/http.ts";
 import { composeEmail, SAMPLE_VARS } from "../_shared/logic/compose.ts";
+import { effectiveSignature } from "../_shared/logic/groupSettings.ts";
 import { base64Url, buildMime } from "../_shared/logic/mime.ts";
 import { runMailboxCycle } from "./cycle.ts";
 
@@ -48,6 +49,7 @@ interface TestBody {
   sequence_id: string;
   step_no: number;
   contact_id?: string | null;
+  group_id?: string | null;
 }
 
 async function testSend(req: Request, body: TestBody) {
@@ -63,10 +65,33 @@ async function testSend(req: Request, body: TestBody) {
   const step = steps?.find((s) => s.step_no === Number(body.step_no));
   if (!step) return json({ error: "Korak ne postoji. Sačuvajte sekvencu pa probajte ponovo." }, 400);
 
+  // Potpis kao u pravom slanju: grupa koja šalje ovu sekvencu iz ovog mailboxa, ili grupa kontakta.
+  let groupId = body.group_id ?? null;
   let vars = SAMPLE_VARS;
   if (body.contact_id) {
     const { data: c } = await admin.from("contacts").select("*").eq("id", body.contact_id).single();
     if (c) vars = { ime: c.first_name, firma: c.company, grad: c.city, personalizacija: c.personalization };
+    if (c && !groupId) groupId = c.group_id;
+  }
+  const { data: senders } = await admin
+    .from("groups")
+    .select("id, signature")
+    .eq("mailbox_id", mailbox.id)
+    .eq("sequence_id", body.sequence_id)
+    .order("priority");
+  const group = senders?.find((g) => g.id === groupId) ?? senders?.[0] ?? null;
+
+  // Bez izabranog kontakta: pravi kontakt iz grupe, da test bude na jeziku kampanje (srpski primer samo ako grupa nema kontakata).
+  if (!body.contact_id && group) {
+    const { data: sample } = await admin
+      .from("contacts")
+      .select("first_name, company, city, personalization")
+      .eq("group_id", group.id)
+      .not("personalization", "is", null)
+      .order("created_at")
+      .limit(1)
+      .maybeSingle();
+    if (sample) vars = { ime: sample.first_name, firma: sample.company, grad: sample.city, personalizacija: sample.personalization };
   }
 
   const email = composeEmail({
@@ -75,7 +100,7 @@ async function testSend(req: Request, body: TestBody) {
     body: step.body,
     firstSubject: steps!.find((s) => s.step_no === 1)?.subject ?? null,
     vars,
-    signature: mailbox.signature,
+    signature: effectiveSignature(mailbox, group),
     testMode: true,
   });
 

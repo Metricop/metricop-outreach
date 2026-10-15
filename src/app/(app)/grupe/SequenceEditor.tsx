@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { Button, Field, Notice, inputClass } from "@/components/ui";
 import { callFunction } from "@/lib/functions";
 import { createClient } from "@/lib/supabase/client";
-import type { Contact, Mailbox, SequenceOption, SequenceStep } from "@/lib/types";
+import type { Contact, Group, Mailbox, SequenceOption, SequenceStep } from "@/lib/types";
 import { composeEmail, SAMPLE_VARS } from "@logic/compose.ts";
+import { effectiveSignature } from "@logic/groupSettings.ts";
 import { lintStep } from "@logic/templateLint.ts";
 
 const LANGUAGES: Record<string, string> = { sr: "Srpski", sv: "Švedski", en: "Engleski" };
@@ -26,11 +27,16 @@ interface Draft {
 
 async function fetchBase() {
   const supabase = createClient();
-  const [s, m] = await Promise.all([
+  const [s, m, g] = await Promise.all([
     supabase.from("sequences").select("id, name, language").order("name"),
     supabase.from("mailboxes").select("*").order("email"),
+    supabase.from("groups").select("*").order("priority"),
   ]);
-  return { sequences: (s.data ?? []) as SequenceOption[], mailboxes: (m.data ?? []) as Mailbox[] };
+  return {
+    sequences: (s.data ?? []) as SequenceOption[],
+    mailboxes: (m.data ?? []) as Mailbox[],
+    groups: (g.data ?? []) as Group[],
+  };
 }
 
 async function fetchDraft(seq: SequenceOption): Promise<Draft> {
@@ -52,6 +58,7 @@ export function SequenceEditor({ onSequencesChanged }: { onSequencesChanged?: ()
   const supabase = createClient();
   const [sequences, setSequences] = useState<SequenceOption[]>([]);
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [dirty, setDirty] = useState(false);
   const [newName, setNewName] = useState("");
@@ -73,6 +80,7 @@ export function SequenceEditor({ onSequencesChanged }: { onSequencesChanged?: ()
       if (!alive) return;
       setSequences(b.sequences);
       setMailboxes(b.mailboxes);
+      setGroups(b.groups);
       if (b.mailboxes[0]) setMailboxId(b.mailboxes[0].id);
     });
     return () => {
@@ -106,6 +114,22 @@ export function SequenceEditor({ onSequencesChanged }: { onSequencesChanged?: ()
     setDraft(await fetchDraft(seq));
     setDirty(false);
     setPreviewStep(1);
+    // Pregled iz mailboxa grupe koja šalje ovu sekvencu, da potpis i pošiljalac budu pravi.
+    const sender = groups.find((g) => g.sequence_id === seq.id && g.mailbox_id);
+    if (sender?.mailbox_id) setMailboxId(sender.mailbox_id);
+    // Pregled odmah na pravom kontaktu iz grupe (jezik kampanje), a ne na srpskom primeru.
+    setContact(null);
+    if (sender) {
+      const { data } = await supabase
+        .from("contacts")
+        .select("*")
+        .eq("group_id", sender.id)
+        .not("personalization", "is", null)
+        .order("created_at")
+        .limit(1)
+        .maybeSingle();
+      if (data) setContact(data as Contact);
+    }
   }
 
   async function create() {
@@ -191,6 +215,7 @@ export function SequenceEditor({ onSequencesChanged }: { onSequencesChanged?: ()
         sequence_id: draft.id,
         step_no: previewStep,
         contact_id: contact?.id ?? null,
+        group_id: senderGroup?.id ?? null,
       });
       setMessage(`Test mejl (korak ${previewStep}) je poslat na ${res.to}.`);
     } catch (e) {
@@ -201,6 +226,8 @@ export function SequenceEditor({ onSequencesChanged }: { onSequencesChanged?: ()
   }
 
   const mailbox = mailboxes.find((m) => m.id === mailboxId) ?? null;
+  const senderGroup = draft ? (groups.find((g) => g.sequence_id === draft.id && g.mailbox_id === mailboxId) ?? null) : null;
+  const signature = mailbox ? effectiveSignature(mailbox, senderGroup) : null;
   const vars = contact
     ? { ime: contact.first_name, firma: contact.company, grad: contact.city, personalizacija: contact.personalization }
     : SAMPLE_VARS;
@@ -213,7 +240,7 @@ export function SequenceEditor({ onSequencesChanged }: { onSequencesChanged?: ()
           body: step.body,
           firstSubject: draft.steps[0]?.subject ?? null,
           vars,
-          signature: mailbox?.signature,
+          signature,
         })
       : null;
 
@@ -278,11 +305,11 @@ export function SequenceEditor({ onSequencesChanged }: { onSequencesChanged?: ()
 
             <p className="text-xs text-muted">
               Polja: <code>{"{{ime}}"}</code> <code>{"{{firma}}"}</code> <code>{"{{grad}}"}</code> <code>{"{{personalizacija}}"}</code>.
-              Prazno ime briše i zarez ispred; prazna personalizacija briše ceo red. Potpis se dodaje automatski iz mailboxa.
+              Prazno ime briše i zarez ispred; prazna personalizacija briše ceo red. Potpis se dodaje automatski iz grupe, a ako ga grupa nema, iz mailboxa.
             </p>
 
             {draft.steps.map((s) => {
-              const warnings = lintStep({ stepNo: s.step_no, subject: s.subject, body: s.body, signature: mailbox?.signature });
+              const warnings = lintStep({ stepNo: s.step_no, subject: s.subject, body: s.body, signature });
               return (
                 <div key={s.step_no} className="space-y-3 rounded-xl border border-border bg-surface p-4">
                   <div className="flex items-center justify-between gap-2">
@@ -431,7 +458,19 @@ export function SequenceEditor({ onSequencesChanged }: { onSequencesChanged?: ()
                     <span className="font-medium">{preview.subject || "(bez naslova)"}</span>
                   </p>
                 </div>
-                <div className="whitespace-pre-wrap break-words px-4 py-4 leading-relaxed">{preview.text || "(prazno)"}</div>
+                {/* Pregled kao u inboxu: isti HTML koji se šalje (podebljano, linkovi, logo). Bez skripti. */}
+                <iframe
+                  title="Pregled mejla"
+                  sandbox="allow-same-origin"
+                  srcDoc={`<!doctype html><html><body style="margin:16px;background:#fff">${preview.html}</body></html>`}
+                  className="block w-full rounded-b-xl bg-white"
+                  style={{ border: 0, minHeight: 320 }}
+                  onLoad={(e) => {
+                    const f = e.currentTarget;
+                    const h = f.contentDocument?.body.scrollHeight;
+                    if (h) f.style.height = `${h + 32}px`;
+                  }}
+                />
               </div>
             )}
 

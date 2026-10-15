@@ -14,6 +14,7 @@ import {
 } from "../_shared/gmail.ts";
 import type { Admin } from "../_shared/http.ts";
 import { emailDomain } from "../_shared/logic/email.ts";
+import { effectiveSendWindow, effectiveSignature } from "../_shared/logic/groupSettings.ts";
 import { planRun, randomPauseMs, shouldPauseForBounces } from "../_shared/logic/limits.ts";
 import { base64Url, buildMime } from "../_shared/logic/mime.ts";
 import { prepareOutgoing, type OutgoingContact } from "../_shared/logic/outgoing.ts";
@@ -100,17 +101,19 @@ export async function runMailboxCycle(admin: Admin, mailboxId: string) {
     throw e;
   }
 
-  // 4. Radno vreme: pon–pet, u zoni mailboxa. Van toga samo provera odgovora.
-  if (!isWithinSendWindow(now, { timezone: mailbox.timezone, sendHourFrom: mailbox.send_hour_from, sendHourTo: mailbox.send_hour_to })) {
-    return { replies: replyCheck, skipped: "Van radnog vremena." };
-  }
+  const { data: allGroups } = await admin
+    .from("groups")
+    .select("id, active, priority, sequence_id, signature, timezone, send_hour_from, send_hour_to")
+    .eq("mailbox_id", mailboxId);
+  if (!allGroups?.length) return { replies: replyCheck, skipped: "Mailbox nema dodeljenih grupa." };
+
+  // 4. Radno vreme: pon–pet, u zoni grupe (ili mailboxa ako grupa nema svoje). Van toga samo provera odgovora.
+  const groups = allGroups.filter((g) => isWithinSendWindow(now, effectiveSendWindow(mailbox, g)));
+  if (!groups.length) return { replies: replyCheck, skipped: "Van radnog vremena." };
 
   const date = localDate(now, mailbox.timezone);
   const { data: counter } = await admin.from("daily_counters").select("sent_new, sent_total").eq("mailbox_id", mailboxId).eq("date", date).maybeSingle();
   const counts = { sentNew: counter?.sent_new ?? 0, sentTotal: counter?.sent_total ?? 0 };
-
-  const { data: groups } = await admin.from("groups").select("id, active, priority, sequence_id").eq("mailbox_id", mailboxId);
-  if (!groups?.length) return { replies: replyCheck, skipped: "Mailbox nema dodeljenih grupa." };
 
   const seqIds = [...new Set(groups.map((g) => g.sequence_id).filter(Boolean))];
   const { data: stepRows } = seqIds.length
@@ -207,7 +210,8 @@ export async function runMailboxCycle(admin: Admin, mailboxId: string) {
     }
     const c = item.contact;
     try {
-      const out = prepareOutgoing(mailbox, c, item.steps, item.stepNo);
+      const group = groups.find((g) => g.id === c.group_id);
+      const out = prepareOutgoing({ ...mailbox, signature: effectiveSignature(mailbox, group) }, c, item.steps, item.stepNo);
       const raw = buildMime({
         fromEmail: out.fromEmail,
         fromName: out.fromName,

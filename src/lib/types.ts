@@ -52,7 +52,26 @@ export interface Group {
   sequence_id: string | null;
   active: boolean;
   priority: number;
+  /** Prazno = potpis mailboxa. */
+  signature: string | null;
+  /** Prazno = radno vreme mailboxa. */
+  timezone: string | null;
+  send_hour_from: number | null;
+  send_hour_to: number | null;
 }
+
+export type Market = "RS" | "SE" | "US";
+
+export const MARKET_LABELS: Record<Market, string> = { RS: "Srbija", SE: "Švedska", US: "SAD" };
+
+export const TIMEZONE_OPTIONS = [
+  "Europe/Belgrade",
+  "Europe/Stockholm",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+];
 
 export interface Mailbox {
   id: string;
@@ -60,7 +79,7 @@ export interface Mailbox {
   alias_email: string | null;
   display_name: string | null;
   signature: string | null;
-  market: "RS" | "SE";
+  market: Market;
   daily_limit_new: number;
   daily_limit_total: number;
   per_run_limit: number;
@@ -86,7 +105,7 @@ export interface MailboxOption {
   id: string;
   email: string;
   display_name: string | null;
-  market: "RS" | "SE";
+  market: Market;
 }
 
 export interface SequenceOption {

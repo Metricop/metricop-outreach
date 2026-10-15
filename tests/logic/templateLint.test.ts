@@ -18,6 +18,9 @@ describe("lintStep", () => {
   it("švedska rečenica za odjavu se prepoznaje", () => {
     expect(lintStep({ stepNo: 1, subject: "Hej", body: "Hej!\nOm du inte vill få fler mejl, svara bara." })).toEqual([]);
   });
+  it("engleska rečenica za odjavu se prepoznaje", () => {
+    expect(lintStep({ stepNo: 1, subject: "Hi", body: "Hi!\n\nP.S. If this isn't your area, just let me know and I won't write again." })).toEqual([]);
+  });
   it("više od jednog linka, računajući potpis", () => {
     const w = lintStep({ stepNo: 2, subject: null, body: "Pogledajte https://metricop.com/a", signature: "www.metricop.com" });
     expect(w[0]).toContain("2 linka");
