@@ -32,11 +32,21 @@ describe("composeEmail", () => {
     expect(e.html).toContain('<img src="https://example.com/logo.png" alt="Metricop" width="96"');
     expect(e.html.endsWith("</div></div>")).toBe(true);
   });
-  it("adresa u potpisu ne postaje link: cifre su razdvojene nevidljivim znakom, tekst ostaje čist", () => {
+  it("adresa u potpisu ne postaje link: ispred svake cifre je nevidljivi znak, tekst ostaje čist", () => {
     const e = composeEmail({ ...base, signature: "Glöstorps Röseväg 13\n417 45 Göteborg\nwww.metricop.se", stepNo: 2, subject: null, body: "Hej" });
-    expect(e.html).toContain("<div>Glöstorps Röseväg 1&zwnj;3</div><div>4&zwnj;1&zwnj;7 4&zwnj;5 Göteborg</div>");
+    expect(e.html).toContain("<div>Glöstorps Röseväg &zwnj;1&zwnj;3</div><div>&zwnj;4&zwnj;1&zwnj;7 &zwnj;4&zwnj;5 Göteborg</div>");
     expect(e.html).toContain('<a href="https://www.metricop.se">www.metricop.se</a>');
     expect(e.text).toBe("Hej\n\nGlöstorps Röseväg 13\n417 45 Göteborg\nwww.metricop.se");
+  });
+  it("jednocifren kućni broj takođe dobija nevidljivi znak", () => {
+    const e = composeEmail({ ...base, signature: "Kralja Stefana Prvovenčanog 6", stepNo: 2, subject: null, body: "Dan" });
+    expect(e.html).toContain("<div>Kralja Stefana Prvovenčanog &zwnj;6</div>");
+  });
+  it("red _iskošeno_ ispod logoa: sitna siva napomena u HTML-u, bez donjih crta u tekstu", () => {
+    const signature = "Nikola\n![Metricop](https://example.com/logo.png)\n\n_Ako ne želite da vam pišemo, samo odgovorite._";
+    const e = composeEmail({ ...base, signature, stepNo: 2, subject: null, body: "Dan" });
+    expect(e.html).toContain('<br><div style="color:#555555;font-style:italic">Ako ne želite da vam pišemo, samo odgovorite.</div>');
+    expect(e.text).toBe("Dan\n\nNikola\n\nAko ne želite da vam pišemo, samo odgovorite.");
   });
   it("bez potpisa nema praznih redova na kraju", () => {
     expect(composeEmail({ ...base, signature: "", stepNo: 2, subject: null, body: "Tekst\n\n" }).text).toBe("Tekst");
