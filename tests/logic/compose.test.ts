@@ -34,13 +34,16 @@ describe("composeEmail", () => {
   });
   it("adresa u potpisu ne postaje link: ispred svake cifre je nevidljivi znak, tekst ostaje čist", () => {
     const e = composeEmail({ ...base, signature: "Glöstorps Röseväg 13\n417 45 Göteborg\nwww.metricop.se", stepNo: 2, subject: null, body: "Hej" });
-    expect(e.html).toContain("<div>Glöstorps Röseväg &zwnj;1&zwnj;3</div><div>&zwnj;4&zwnj;1&zwnj;7 &zwnj;4&zwnj;5 Göteborg</div>");
+    expect(e.html).toContain('style="color:#222222;text-decoration:none">Glöstorps Röseväg 13</a></div><div>&zwnj;4&zwnj;1&zwnj;7 &zwnj;4&zwnj;5 Göteborg</div>');
     expect(e.html).toContain('<a href="https://www.metricop.se">www.metricop.se</a>');
     expect(e.text).toBe("Hej\n\nGlöstorps Röseväg 13\n417 45 Göteborg\nwww.metricop.se");
   });
-  it("jednocifren kućni broj takođe dobija nevidljivi znak", () => {
-    const e = composeEmail({ ...base, signature: "Kralja Stefana Prvovenčanog 6", stepNo: 2, subject: null, body: "Dan" });
-    expect(e.html).toContain("<div>Kralja Stefana Prvovenčanog &zwnj;6</div>");
+  it("ulica sa kućnim brojem je u našem linku obojenom kao tekst, da je Gmail ne bi pretvorio u plavi link", () => {
+    const e = composeEmail({ ...base, signature: "Kralja Stefana Prvovenčanog 6\nPIB: 115596395 | MB: 22181335\n+381 64 143 3840", stepNo: 2, subject: null, body: "Dan" });
+    expect(e.html).toContain('<div><a href="https://www.google.com/maps/search/?api=1&amp;query=Kralja%20Stefana%20Prvoven%C4%8Danog%206" style="color:#222222;text-decoration:none">Kralja Stefana Prvovenčanog 6</a></div>');
+    expect(e.html).toContain("<div>PIB: &zwnj;1");
+    expect(e.html).toContain("<div>+&zwnj;3&zwnj;8&zwnj;1");
+    expect(e.text).toBe("Dan\n\nKralja Stefana Prvovenčanog 6\nPIB: 115596395 | MB: 22181335\n+381 64 143 3840");
   });
   it("red _iskošeno_ ispod logoa: sitna siva napomena u HTML-u, bez donjih crta u tekstu", () => {
     const signature = "Nikola\n![Metricop](https://example.com/logo.png)\n\n_Ako ne želite da vam pišemo, samo odgovorite._";

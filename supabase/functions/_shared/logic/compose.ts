@@ -71,6 +71,7 @@ export function textToHtml(text: string): string {
 // i ceo red _iskošeno_ (sitna tamnosiva napomena, npr. odjava ispod logoa).
 const IMAGE_LINE_RE = /^!\[([^\]\n]*)\]\((https:\/\/[^\s)]+)\)$/;
 const NOTE_LINE_RE = /^_(.+)_$/;
+const STREET_LINE_RE = /^[\p{L}][\p{L} .'-]*\s\d+[a-zA-Z]?(\/\d+)?$/u;
 const BOLD_RE = /\*\*([^*\n]+)\*\*/g;
 
 /** Tekstualna verzija potpisa: bez zvezdica i bez reda sa slikom. */
@@ -93,9 +94,14 @@ export function signatureToHtml(signature: string): string {
     if (img) return `<div><img src="${escapeHtml(img[2])}" alt="${escapeHtml(img[1])}" width="96" style="max-width:100%"></div>`;
     const note = t.match(NOTE_LINE_RE);
     if (note) return `<div style="color:#555555;font-style:italic">${linkifyWithNamed(note[1])}</div>`;
+    // Ulica sa kućnim brojem: Gmail je prepoznaje kao adresu i sam pravi plavi link ka mapi, a nevidljivi znakovi
+    // to ne sprečavaju. Gmail ne dira tekst koji je već u linku, pa adresu stavljamo u naš link obojen kao običan tekst.
+    if (STREET_LINE_RE.test(t)) {
+      const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t)}`;
+      return `<div><a href="${escapeHtml(maps)}" style="color:#222222;text-decoration:none">${escapeHtml(t)}</a></div>`;
+    }
     let html = linkifyWithNamed(t).replace(BOLD_RE, "<strong>$1</strong>");
-    // Red bez linka (adresa, Org.nr): nevidljivi znak ispred svake cifre sprečava da Gmail sam napravi plavi link ka mapi,
-    // i kod jednocifrenog kućnog broja.
+    // Ostali redovi bez linka (poštanski broj, Org.nr): nevidljivi znak ispred svake cifre.
     if (!html.includes("<a ")) html = html.replace(/(\d)/g, "&zwnj;$1");
     return `<div>${html}</div>`;
   });
