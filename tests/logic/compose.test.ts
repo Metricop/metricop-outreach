@@ -12,7 +12,7 @@ describe("composeEmail", () => {
     const e = composeEmail({ ...base, stepNo: 1, subject: "Saradnja za {{firma}}", body: "Zdravo, {{ime}},\n\n{{personalizacija}}\nPišem iz Metricopa." });
     expect(e.subject).toBe("Saradnja za Geo Plan");
     expect(e.text).toBe("Zdravo, Marko,\n\nPišem iz Metricopa.\n\nNikola\nMetricop");
-    expect(e.html).toContain('<p style="color:#222222">Nikola<br>Metricop</p>');
+    expect(e.html).toContain("<div>Nikola</div><div>Metricop</div>");
   });
   it("follow-up dobija Re: i naslov prvog koraka", () => {
     const e = composeEmail({ ...base, stepNo: 2, subject: "ignorisano", body: "Samo da proverim." });
@@ -21,6 +21,16 @@ describe("composeEmail", () => {
   it("test mod dodaje [TEST] na početak naslova", () => {
     expect(composeEmail({ ...base, stepNo: 1, subject: "Zdravo", body: "x", testMode: true }).subject).toBe("[TEST] Zdravo");
     expect(composeEmail({ ...base, stepNo: 3, subject: null, body: "x", testMode: true }).subject).toBe("[TEST] Re: Saradnja za Geo Plan");
+  });
+  it("potpis: podebljano, linkovi i logo u HTML-u; tekst bez oznaka i bez slike", () => {
+    const signature = "Med vänlig hälsning,\n\n**Marcus** | Sales Manager\nmarcus@metricop-geo.com\nwww.metricop.se\n![Metricop](https://example.com/logo.png)";
+    const e = composeEmail({ ...base, signature, stepNo: 2, subject: null, body: "Hej" });
+    expect(e.text).toBe("Hej\n\nMed vänlig hälsning,\n\nMarcus | Sales Manager\nmarcus@metricop-geo.com\nwww.metricop.se");
+    expect(e.html).toContain("<div><strong>Marcus</strong> | Sales Manager</div>");
+    expect(e.html).toContain('<a href="mailto:marcus@metricop-geo.com">marcus@metricop-geo.com</a>');
+    expect(e.html).toContain('<a href="https://www.metricop.se">www.metricop.se</a>');
+    expect(e.html).toContain('<img src="https://example.com/logo.png" alt="Metricop" width="96"');
+    expect(e.html.endsWith("</div></div>")).toBe(true);
   });
   it("bez potpisa nema praznih redova na kraju", () => {
     expect(composeEmail({ ...base, signature: "", stepNo: 2, subject: null, body: "Tekst\n\n" }).text).toBe("Tekst");

@@ -67,6 +67,32 @@ export function textToHtml(text: string): string {
   return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#222222">${paragraphs.join("")}</div>`;
 }
 
+// Potpis podržava i malo oblikovanja: **podebljano** i red sa slikom ![logo](https://...).
+const IMAGE_LINE_RE = /^!\[([^\]\n]*)\]\((https:\/\/[^\s)]+)\)$/;
+const BOLD_RE = /\*\*([^*\n]+)\*\*/g;
+
+/** Tekstualna verzija potpisa: bez zvezdica i bez reda sa slikom. */
+export function signatureToPlain(signature: string): string {
+  return signature
+    .split("\n")
+    .filter((line) => !IMAGE_LINE_RE.test(line.trim()))
+    .join("\n")
+    .replace(BOLD_RE, "$1")
+    .trim();
+}
+
+/** HTML potpis: zbijeni redovi (kao u Gmail potpisu), podebljano, linkovi i logo. */
+export function signatureToHtml(signature: string): string {
+  const lines = signature.split("\n").map((line) => {
+    const t = line.trim();
+    if (!t) return "<br>";
+    const img = t.match(IMAGE_LINE_RE);
+    if (img) return `<div><img src="${escapeHtml(img[2])}" alt="${escapeHtml(img[1])}" width="96" style="max-width:100%"></div>`;
+    return `<div>${linkifyWithNamed(t).replace(BOLD_RE, "<strong>$1</strong>")}</div>`;
+  });
+  return `<div style="color:#222222;margin-top:14px">${lines.join("")}</div>`;
+}
+
 export function composeEmail(input: ComposeInput): ComposedEmail {
   const first = renderTemplate(input.firstSubject ?? "", input.vars).trim();
   let subject =
@@ -75,9 +101,11 @@ export function composeEmail(input: ComposeInput): ComposedEmail {
 
   const body = renderTemplate(input.body, input.vars).trim();
   const signature = (input.signature ?? "").trim();
-  const full = signature ? `${body}\n\n${signature}` : body;
+  const text = signature ? `${body}\n\n${signatureToPlain(signature)}` : body;
+  let html = textToHtml(body);
+  if (signature) html = html.replace(/<\/div>$/, `${signatureToHtml(signature)}</div>`);
 
-  return { subject, text: namedLinksToPlain(full), html: textToHtml(full) };
+  return { subject, text: namedLinksToPlain(text), html };
 }
 
 /** Podaci za pregled i test slanje kad nije izabran pravi kontakt. */

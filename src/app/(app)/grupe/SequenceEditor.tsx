@@ -445,7 +445,19 @@ export function SequenceEditor({ onSequencesChanged }: { onSequencesChanged?: ()
                     <span className="font-medium">{preview.subject || "(bez naslova)"}</span>
                   </p>
                 </div>
-                <div className="whitespace-pre-wrap break-words px-4 py-4 leading-relaxed">{preview.text || "(prazno)"}</div>
+                {/* Pregled kao u inboxu: isti HTML koji se šalje (podebljano, linkovi, logo). Bez skripti. */}
+                <iframe
+                  title="Pregled mejla"
+                  sandbox="allow-same-origin"
+                  srcDoc={`<!doctype html><html><body style="margin:16px;background:#fff">${preview.html}</body></html>`}
+                  className="block w-full rounded-b-xl bg-white"
+                  style={{ border: 0, minHeight: 320 }}
+                  onLoad={(e) => {
+                    const f = e.currentTarget;
+                    const h = f.contentDocument?.body.scrollHeight;
+                    if (h) f.style.height = `${h + 32}px`;
+                  }}
+                />
               </div>
             )}
 

@@ -223,10 +223,10 @@ export function GroupsManager() {
             <div className="space-y-3 rounded-xl border border-border p-3">
               <p className="text-sm font-medium">Posebno za ovu grupu</p>
               <p className="text-xs text-muted">Prazno polje znači da važi isto što i za mailbox. Koristi se kad isti nalog šalje drugom tržištu, npr. SAD.</p>
-              <Field label="Potpis grupe">
+              <Field label="Potpis grupe" hint="**ime** = podebljano. Logo u posebnom redu: ![Metricop](https://adresa-slike.png)">
                 <textarea
                   className={inputClass}
-                  rows={4}
+                  rows={8}
                   value={draft.signature ?? ""}
                   onChange={(e) => setDraft({ ...draft, signature: e.target.value })}
                 />
