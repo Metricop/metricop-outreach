@@ -88,7 +88,10 @@ export function signatureToHtml(signature: string): string {
     if (!t) return "<br>";
     const img = t.match(IMAGE_LINE_RE);
     if (img) return `<div><img src="${escapeHtml(img[2])}" alt="${escapeHtml(img[1])}" width="96" style="max-width:100%"></div>`;
-    return `<div>${linkifyWithNamed(t).replace(BOLD_RE, "<strong>$1</strong>")}</div>`;
+    let html = linkifyWithNamed(t).replace(BOLD_RE, "<strong>$1</strong>");
+    // Red bez linka (adresa, Org.nr): nevidljivi znak između cifara sprečava da Gmail sam napravi plavi link ka mapi.
+    if (!html.includes("<a ")) html = html.replace(/(\d)(?=\d)/g, "$1&zwnj;");
+    return `<div>${html}</div>`;
   });
   return `<div style="color:#222222;margin-top:14px">${lines.join("")}</div>`;
 }

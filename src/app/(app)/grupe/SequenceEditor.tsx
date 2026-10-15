@@ -117,6 +117,19 @@ export function SequenceEditor({ onSequencesChanged }: { onSequencesChanged?: ()
     // Pregled iz mailboxa grupe koja šalje ovu sekvencu, da potpis i pošiljalac budu pravi.
     const sender = groups.find((g) => g.sequence_id === seq.id && g.mailbox_id);
     if (sender?.mailbox_id) setMailboxId(sender.mailbox_id);
+    // Pregled odmah na pravom kontaktu iz grupe (jezik kampanje), a ne na srpskom primeru.
+    setContact(null);
+    if (sender) {
+      const { data } = await supabase
+        .from("contacts")
+        .select("*")
+        .eq("group_id", sender.id)
+        .not("personalization", "is", null)
+        .order("created_at")
+        .limit(1)
+        .maybeSingle();
+      if (data) setContact(data as Contact);
+    }
   }
 
   async function create() {
