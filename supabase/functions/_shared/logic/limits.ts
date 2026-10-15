@@ -5,8 +5,8 @@ export const HARD_DAILY_CAP = 50;
 
 /** Prve dve nedelje posle dodavanja mailboxa važe niži limiti (zagrevanje). */
 export const WARMUP_DAYS = 14;
-export const WARMUP_MAX_NEW = 10;
-export const WARMUP_MAX_TOTAL = 20;
+export const WARMUP_MAX_NEW = 20;
+export const WARMUP_MAX_TOTAL = 40;
 
 export interface MailboxLimits {
   dailyLimitNew: number;

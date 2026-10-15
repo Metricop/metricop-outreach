@@ -32,9 +32,10 @@ describe("composeEmail", () => {
     expect(e.html).toContain('<img src="https://example.com/logo.png" alt="Metricop" width="96"');
     expect(e.html.endsWith("</div></div>")).toBe(true);
   });
-  it("adresa u potpisu ne postaje link: ispred svake cifre je nevidljivi znak, tekst ostaje čist", () => {
+  it("ulica i poštanski broj su u našem linku obojenom kao tekst, tekst ostaje čist", () => {
     const e = composeEmail({ ...base, signature: "Glöstorps Röseväg 13\n417 45 Göteborg\nwww.metricop.se", stepNo: 2, subject: null, body: "Hej" });
-    expect(e.html).toContain('style="color:#222222;text-decoration:none">Glöstorps Röseväg 13</a></div><div>&zwnj;4&zwnj;1&zwnj;7 &zwnj;4&zwnj;5 Göteborg</div>');
+    expect(e.html).toContain('style="color:#222222;text-decoration:none">Glöstorps Röseväg 13</a></div>');
+    expect(e.html).toContain('style="color:#222222;text-decoration:none">417 45 Göteborg</a></div>');
     expect(e.html).toContain('<a href="https://www.metricop.se">www.metricop.se</a>');
     expect(e.text).toBe("Hej\n\nGlöstorps Röseväg 13\n417 45 Göteborg\nwww.metricop.se");
   });
@@ -43,6 +44,9 @@ describe("composeEmail", () => {
     expect(e.html).toContain('<div><a href="https://www.google.com/maps/search/?api=1&amp;query=Kralja%20Stefana%20Prvoven%C4%8Danog%206" style="color:#222222;text-decoration:none">Kralja Stefana Prvovenčanog 6</a></div>');
     expect(e.html).toContain("<div>PIB: &zwnj;1");
     expect(e.html).toContain("<div>+&zwnj;3&zwnj;8&zwnj;1");
+    expect(composeEmail({ ...base, signature: "30 N Gould St Ste R\nSheridan, WY 82801, USA\nEIN: 38-4287798", stepNo: 2, subject: null, body: "Hi" }).html).toContain(
+      'text-decoration:none">Sheridan, WY 82801, USA</a></div><div>EIN: &zwnj;3&zwnj;8-',
+    );
     expect(e.text).toBe("Dan\n\nKralja Stefana Prvovenčanog 6\nPIB: 115596395 | MB: 22181335\n+381 64 143 3840");
   });
   it("red _iskošeno_ ispod logoa: sitna siva napomena u HTML-u, bez donjih crta u tekstu", () => {
