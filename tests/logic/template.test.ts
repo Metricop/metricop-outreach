@@ -23,3 +23,19 @@ describe("renderTemplate", () => {
     expect(renderTemplate("{{ Firma }} / {{GRAD}}", { firma: "X", grad: "Y" })).toBe("X / Y");
   });
 });
+
+describe("{{vokativ}}", () => {
+  it("srpska imena u vokativu", () => {
+    const r = (ime: string) => renderTemplate("Zdravo, {{vokativ}},\n\nTekst", { ime });
+    expect(r("Nenad")).toBe("Zdravo, Nenade,\n\nTekst");
+    expect(r("Aleksandar")).toBe("Zdravo, Aleksandre,\n\nTekst");
+    expect(r("Predrag")).toBe("Zdravo, Predraže,\n\nTekst");
+    expect(r("Marko")).toBe("Zdravo, Marko,\n\nTekst");
+    expect(r("Ivica")).toBe("Zdravo, Ivice,\n\nTekst");
+    expect(r("MILOŠ")).toBe("Zdravo, Miloše,\n\nTekst");
+  });
+  it("ime koje nije u spisku ili prazno ime daje samo Zdravo,", () => {
+    expect(renderTemplate("Zdravo, {{vokativ}},\n\nTekst", { ime: "Szilard" })).toBe("Zdravo,\n\nTekst");
+    expect(renderTemplate("Zdravo, {{vokativ}},\n\nTekst", { ime: null })).toBe("Zdravo,\n\nTekst");
+  });
+});
