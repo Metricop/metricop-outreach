@@ -1,6 +1,6 @@
 // Upozorenja u uređivaču šablona (pravila isporučivosti iz specifikacije).
 
-export const KNOWN_FIELDS = ["ime", "firma", "grad", "personalizacija"];
+export const KNOWN_FIELDS = ["ime", "vokativ", "firma", "grad", "personalizacija"];
 
 const UNSUBSCRIBE_RE =
   /odjav|unsubscribe|ne želite|ne zelite|ne zanima|avregistr|avprenumer|avsluta|inte (vill|längre|är intresserad)|opt[- ]?out|won't (write|email|follow up|reach out)|not (your area|relevant|interested)/i;
@@ -23,7 +23,8 @@ export function lintStep(s: LintInput): string[] {
 
   if (s.stepNo === 1 && !(s.subject ?? "").trim()) warnings.push("Prvi korak mora da ima naslov.");
   if (!body.trim()) warnings.push("Tekst mejla je prazan.");
-  if (s.stepNo === 1 && !UNSUBSCRIBE_RE.test(body)) {
+  // Rečenica za odjavu može biti i u potpisu (iskošen red ispod logoa).
+  if (s.stepNo === 1 && !UNSUBSCRIBE_RE.test(`${body}\n${s.signature ?? ""}`)) {
     warnings.push("Prvi korak nema rečenicu za odjavu (npr. „Ako ne želite da vam pišemo, samo odgovorite i nećemo vam se više javljati.”).");
   }
 
@@ -35,7 +36,7 @@ export function lintStep(s: LintInput): string[] {
   const unknown = [...`${s.subject ?? ""}\n${body}`.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)]
     .map((m) => m[1].toLowerCase())
     .filter((f) => !KNOWN_FIELDS.includes(f));
-  for (const f of new Set(unknown)) warnings.push(`Nepoznato polje {{${f}}}. Dozvoljena su: {{ime}}, {{firma}}, {{grad}}, {{personalizacija}}.`);
+  for (const f of new Set(unknown)) warnings.push(`Nepoznato polje {{${f}}}. Dozvoljena su: {{ime}}, {{vokativ}}, {{firma}}, {{grad}}, {{personalizacija}}.`);
 
   return warnings;
 }
