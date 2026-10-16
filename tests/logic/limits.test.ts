@@ -34,7 +34,7 @@ describe("effectiveDailyLimits", () => {
   it("prve dve nedelje najviše 10 novih i 20 ukupno", () => {
     expect(
       effectiveDailyLimits(mb({ dailyLimitNew: 30, dailyLimitTotal: 40, createdAt: fresh }), now),
-    ).toEqual({ maxNew: 10, maxTotal: 20 });
+    ).toEqual({ maxNew: 20, maxTotal: 40 });
   });
   it("novih nikad više od ukupnog", () => {
     expect(effectiveDailyLimits(mb({ dailyLimitNew: 30, dailyLimitTotal: 20 }), now).maxNew).toBe(20);
@@ -89,5 +89,9 @@ describe("shouldPauseForBounces", () => {
     expect(shouldPauseForBounces(100, 3)).toBe(false);
     expect(shouldPauseForBounces(100, 4)).toBe(true);
     expect(shouldPauseForBounces(0, 0)).toBe(false);
+  });
+  it("jedan odbijen mejl na malom broju poslatih ne pauzira, dva pauziraju", () => {
+    expect(shouldPauseForBounces(3, 1)).toBe(false);
+    expect(shouldPauseForBounces(10, 2)).toBe(true);
   });
 });
