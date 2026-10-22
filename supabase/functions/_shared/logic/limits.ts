@@ -74,10 +74,10 @@ export function randomPauseMs(random: () => number = Math.random): number {
 /** Bounce stopa iznad 3% u poslednjih 7 dana pauzira mailbox. */
 export const MAX_BOUNCE_RATE = 0.03;
 /**
- * Na 10–15 mejlova dnevno jedan ili dva odbijena su već preko 3%, pa pauza traži bar tri.
- * Blokade filtera primaoca (tip "blocked") se ne broje, jer adresa nije loša.
+ * Jedan ili dva odbijena mejla ne zaustavljaju kampanju (Nikola, 22.10.2026): pauza tek od pet,
+ * a o manjem broju stiže dnevni izveštaj mejlom. Blokade filtera primaoca (tip "blocked") se ne broje.
  */
-export const MIN_BOUNCES_TO_PAUSE = 3;
+export const MIN_BOUNCES_TO_PAUSE = 5;
 
 export function shouldPauseForBounces(sent7d: number, bounced7d: number): boolean {
   if (sent7d <= 0 || bounced7d < MIN_BOUNCES_TO_PAUSE) return false;

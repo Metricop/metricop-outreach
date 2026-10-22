@@ -87,12 +87,13 @@ describe("randomPauseMs", () => {
 describe("shouldPauseForBounces", () => {
   it("pauzira iznad 3%", () => {
     expect(shouldPauseForBounces(100, 3)).toBe(false);
-    expect(shouldPauseForBounces(100, 4)).toBe(true);
+    expect(shouldPauseForBounces(100, 5)).toBe(true);
     expect(shouldPauseForBounces(0, 0)).toBe(false);
   });
-  it("jedan ili dva odbijena mejla na malom broju poslatih ne pauziraju, tri pauziraju", () => {
+  it("do četiri odbijena mejla ne pauziraju, pet pauzira", () => {
     expect(shouldPauseForBounces(3, 1)).toBe(false);
     expect(shouldPauseForBounces(10, 2)).toBe(false);
-    expect(shouldPauseForBounces(30, 3)).toBe(true);
+    expect(shouldPauseForBounces(30, 4)).toBe(false);
+    expect(shouldPauseForBounces(50, 5)).toBe(true);
   });
 });
