@@ -90,8 +90,9 @@ describe("shouldPauseForBounces", () => {
     expect(shouldPauseForBounces(100, 4)).toBe(true);
     expect(shouldPauseForBounces(0, 0)).toBe(false);
   });
-  it("jedan odbijen mejl na malom broju poslatih ne pauzira, dva pauziraju", () => {
+  it("jedan ili dva odbijena mejla na malom broju poslatih ne pauziraju, tri pauziraju", () => {
     expect(shouldPauseForBounces(3, 1)).toBe(false);
-    expect(shouldPauseForBounces(10, 2)).toBe(true);
+    expect(shouldPauseForBounces(10, 2)).toBe(false);
+    expect(shouldPauseForBounces(30, 3)).toBe(true);
   });
 });

@@ -18,7 +18,7 @@ import { effectiveSendWindow, effectiveSignature } from "../_shared/logic/groupS
 import { planRun, randomPauseMs, shouldPauseForBounces } from "../_shared/logic/limits.ts";
 import { base64Url, buildMime } from "../_shared/logic/mime.ts";
 import { prepareOutgoing, type OutgoingContact } from "../_shared/logic/outgoing.ts";
-import { evaluateNewMessages } from "../_shared/logic/replies.ts";
+import { evaluateNewMessages, isPolicyBlock } from "../_shared/logic/replies.ts";
 import { isWithinSendWindow, localDate } from "../_shared/logic/schedule.ts";
 import { dueAction, stateAfterSend, type Step } from "../_shared/logic/sequence.ts";
 
@@ -302,7 +302,8 @@ async function checkReplies(admin: Admin, mailbox: Mailbox, accessToken: string,
     const patch: Record<string, unknown> = { last_seen_message_id: r.lastSeenId };
     if (r.outcome === "bounce") {
       Object.assign(patch, { status: "bounced", next_send_at: null });
-      await log(c.id, "bounce", r.message?.snippet ?? "Mejl nije isporučen.");
+      const snippet = r.message?.snippet ?? "Mejl nije isporučen.";
+      await log(c.id, isPolicyBlock(snippet) ? "blocked" : "bounce", snippet);
       stats.bounces++;
     } else if (r.outcome === "reply") {
       Object.assign(patch, { status: "replied", next_send_at: null });

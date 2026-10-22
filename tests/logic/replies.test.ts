@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyMessage, classifyThread, evaluateNewMessages, parseAddress } from "@logic/replies.ts";
+import { classifyMessage, classifyThread, evaluateNewMessages, isPolicyBlock, parseAddress } from "@logic/replies.ts";
 
 const ours = ["nikola@metricop.com", "outreach@metricop.com"];
 
@@ -81,5 +81,15 @@ describe("evaluateNewMessages", () => {
   });
   it("ako poslednja viđena poruka više ne postoji, gleda celu nit", () => {
     expect(evaluateNewMessages([sent, { id: "m2", from: "x@y.rs" }], ours, "obrisana").outcome).toBe("reply");
+  });
+});
+
+describe("isPolicyBlock", () => {
+  it("blokada filtera primaoca nije loša adresa", () => {
+    expect(isPolicyBlock("Message blocked Your message to lund@lund.se has been blocked. See technical details below")).toBe(true);
+  });
+  it("nepostojeća adresa je pravi bounce", () => {
+    expect(isPolicyBlock("Address not found Your message wasn&#39;t delivered to x@y.rs because the address couldn&#39;t be found. 550 5.1.1")).toBe(false);
+    expect(isPolicyBlock(null)).toBe(false);
   });
 });
