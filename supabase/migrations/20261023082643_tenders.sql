@@ -1,9 +1,5 @@
--- Švedski tenderi za mernu opremu iz baze TED (Nikola, 23.10.2026): kommuner ne dobijaju cold mejl,
--- nego pratimo njihove nabavke; od istog dana i otvorene tendere u celoj EU (Elemtech AB konkuriše u EU). Ponedeljkom u 06:00 UTC funkcija tenders čuva nove objave i šalje mejl.
-
 create table outreach.tenders (
   publication_number text primary key,
-  country            text,
   published_on       date not null,
   buyer              text,
   title              text not null,
@@ -26,8 +22,8 @@ declare v_secret text;
 begin
   select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'outreach_cron_secret';
   perform net.http_post(
-    url := 'https://rhpucosmbdakxlmtmrbv.supabase.co/functions/v1/tenders',
-    body := '{}'::jsonb,
+    url := 'https://rhpucosmbdakxlmtmrbv.supabase.co/functions/v1/run-cycle',
+    body := jsonb_build_object('action', 'tenders'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secret),
     timeout_milliseconds := 60000
   );
