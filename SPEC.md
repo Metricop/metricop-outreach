@@ -88,7 +88,7 @@ Funkcija `run-cycle` radi na svakih 15 minuta i za svaki aktivni mailbox izvrša
 
 Aplikacija mora da čuva reputaciju domena metricop.com, zato su ova pravila ugrađena u kod, a ne ostavljena korisniku.
 
-- **Podrazumevani limiti:** 10 novih i 20 ukupno dnevno po mailboxu prve dve nedelje, zatim do 40 ukupno. Tvrda gornja granica u kodu: 50 dnevno po mailboxu, bez obzira na podešavanje.
+- **Podrazumevani limiti:** 20 novih i 40 ukupno dnevno po mailboxu prve dve nedelje (jedan mailbox šalje dva tržišta po 10), zatim do 40 ukupno. Tvrda gornja granica u kodu: 50 dnevno po mailboxu, bez obzira na podešavanje.
 - **Bez tracking piksela i bez prepravljanja linkova.** Pratimo samo odgovore i bounce.
 - **Lista za izuzimanje** ima prednost nad svim ostalim. Odjava i bounce automatski dodaju adresu; ručno se može dodati i ceo domen.
 - **Jedna adresa nikad ne dobija dve sekvence.** Email je jedinstven u celoj bazi, bez obzira na grupu.

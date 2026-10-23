@@ -2,6 +2,7 @@
 // - action "cycle": automatski krug za jedan mailbox, poziva ga pg_cron (zaglavlje x-cron-secret).
 // - action "test": test slanje iz uređivača šablona ("Pošalji test meni"), poziva prijavljeni član tima.
 // - action "thread": prepiska iz Gmail niti za panel kontakta (samo čitanje), poziva prijavljeni član tima.
+// - action "report": dnevni interni izveštaj o odbijenim mejlovima, poziva ga pg_cron posle slanja.
 
 import { getThreadFull, GmailAuthError, header, messageText, refreshAccessToken, sendRaw } from "../_shared/gmail.ts";
 import { corsHeaders, createAdmin, getTeamUser, json } from "../_shared/http.ts";
@@ -9,6 +10,7 @@ import { composeEmail, SAMPLE_VARS } from "../_shared/logic/compose.ts";
 import { effectiveSignature } from "../_shared/logic/groupSettings.ts";
 import { base64Url, buildMime } from "../_shared/logic/mime.ts";
 import { runMailboxCycle } from "./cycle.ts";
+import { sendDailyReport } from "./report.ts";
 
 const LOCK_SECONDS = 600;
 
@@ -20,6 +22,7 @@ Deno.serve(async (req) => {
     if (body.action === "cycle") return await cycle(req, body.mailbox_id);
     if (body.action === "test") return await testSend(req, body);
     if (body.action === "thread") return await threadView(req, body.contact_id);
+    if (body.action === "report") return await report(req);
     return json({ error: "Nepoznata akcija." }, 400);
   } catch (e) {
     console.error(e);
@@ -42,6 +45,13 @@ async function cycle(req: Request, mailboxId: string) {
   } finally {
     await admin.rpc("unlock_mailbox", { p_mailbox_id: mailboxId });
   }
+}
+
+async function report(req: Request) {
+  const admin = createAdmin();
+  const { data: allowed } = await admin.rpc("verify_cron_secret", { p_secret: req.headers.get("x-cron-secret") ?? "" });
+  if (!allowed) return json({ error: "Zabranjeno." }, 403);
+  return json({ ok: true, ...(await sendDailyReport(admin)) });
 }
 
 interface TestBody {

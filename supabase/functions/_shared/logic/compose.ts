@@ -67,8 +67,12 @@ export function textToHtml(text: string): string {
   return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#222222">${paragraphs.join("")}</div>`;
 }
 
-// Potpis podržava i malo oblikovanja: **podebljano** i red sa slikom ![logo](https://...).
+// Potpis podržava i malo oblikovanja: **podebljano**, red sa slikom ![logo](https://...)
+// i ceo red _iskošeno_ (sitna tamnosiva napomena, npr. odjava ispod logoa).
 const IMAGE_LINE_RE = /^!\[([^\]\n]*)\]\((https:\/\/[^\s)]+)\)$/;
+const NOTE_LINE_RE = /^_(.+)_$/;
+// Red adrese: slova i cifre, bez dvotačke (PIB:, Org.nr:, EIN:), plusa (telefon), @ i linka.
+const ADDRESS_LINE_RE = /^(?=.*\d)(?=.*\p{L})[^:+@*\[\]]+$/u;
 const BOLD_RE = /\*\*([^*\n]+)\*\*/g;
 
 /** Tekstualna verzija potpisa: bez zvezdica i bez reda sa slikom. */
@@ -76,6 +80,7 @@ export function signatureToPlain(signature: string): string {
   return signature
     .split("\n")
     .filter((line) => !IMAGE_LINE_RE.test(line.trim()))
+    .map((line) => line.trim().replace(NOTE_LINE_RE, "$1"))
     .join("\n")
     .replace(BOLD_RE, "$1")
     .trim();
@@ -88,9 +93,18 @@ export function signatureToHtml(signature: string): string {
     if (!t) return "<br>";
     const img = t.match(IMAGE_LINE_RE);
     if (img) return `<div><img src="${escapeHtml(img[2])}" alt="${escapeHtml(img[1])}" width="96" style="max-width:100%"></div>`;
+    const note = t.match(NOTE_LINE_RE);
+    if (note) return `<div style="color:#555555;font-style:italic">${linkifyWithNamed(note[1])}</div>`;
+    // Redovi adrese (ulica, poštanski broj i grad): Gmail ih prepoznaje kao adresu i sam pravi plavi link ka mapi,
+    // a nevidljivi znakovi to ne sprečavaju. Gmail ne dira tekst koji je već u linku, pa adresu stavljamo u naš
+    // link obojen kao običan tekst.
+    if (ADDRESS_LINE_RE.test(t) && !t.match(LINK_RE)) {
+      const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t)}`;
+      return `<div><a href="${escapeHtml(maps)}" style="color:#222222;text-decoration:none">${escapeHtml(t)}</a></div>`;
+    }
     let html = linkifyWithNamed(t).replace(BOLD_RE, "<strong>$1</strong>");
-    // Red bez linka (adresa, Org.nr): nevidljivi znak između cifara sprečava da Gmail sam napravi plavi link ka mapi.
-    if (!html.includes("<a ")) html = html.replace(/(\d)(?=\d)/g, "$1&zwnj;");
+    // Ostali redovi bez linka (Org.nr, PIB): nevidljivi znak ispred svake cifre.
+    if (!html.includes("<a ")) html = html.replace(/(\d)/g, "&zwnj;$1");
     return `<div>${html}</div>`;
   });
   return `<div style="color:#222222;margin-top:14px">${lines.join("")}</div>`;

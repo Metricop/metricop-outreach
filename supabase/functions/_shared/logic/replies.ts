@@ -40,6 +40,18 @@ export function classifyMessage(h: MessageHeaders, ourAddresses: string[]): Mess
   return "reply";
 }
 
+const POLICY_BLOCK_RE = /\b(message|has been|was) blocked\b|blocked (by|due to)|rejected (by|due to) (policy|spam)|spam (filter|policy)/i;
+const BAD_ADDRESS_RE = /address not found|couldn'?t be found|does not exist|user unknown|no such user|mailbox unavailable|5\.1\.1/i;
+
+/**
+ * Bounce koji je blokada filtera primaoca (npr. opštinski spam filter), a ne loša adresa.
+ * Takav se ne računa u bounce stopu, ali kontakt se i dalje ne kontaktira.
+ */
+export function isPolicyBlock(snippet: string | null | undefined): boolean {
+  const s = (snippet ?? "").replace(/&#39;/g, "'");
+  return POLICY_BLOCK_RE.test(s) && !BAD_ADDRESS_RE.test(s);
+}
+
 /**
  * Ishod cele niti: bounce i pravi odgovor zaustavljaju sekvencu,
  * automatski odgovor se samo beleži.

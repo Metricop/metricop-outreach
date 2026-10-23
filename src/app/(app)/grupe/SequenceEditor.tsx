@@ -304,8 +304,8 @@ export function SequenceEditor({ onSequencesChanged }: { onSequencesChanged?: ()
             </div>
 
             <p className="text-xs text-muted">
-              Polja: <code>{"{{ime}}"}</code> <code>{"{{firma}}"}</code> <code>{"{{grad}}"}</code> <code>{"{{personalizacija}}"}</code>.
-              Prazno ime briše i zarez ispred; prazna personalizacija briše ceo red. Potpis se dodaje automatski iz grupe, a ako ga grupa nema, iz mailboxa.
+              Polja: <code>{"{{ime}}"}</code> <code>{"{{vokativ}}"}</code> <code>{"{{firma}}"}</code> <code>{"{{grad}}"}</code> <code>{"{{personalizacija}}"}</code>.
+              Prazno ime briše i zarez ispred. <code>{"{{vokativ}}"}</code> je ime u vokativu (Nenade), a za ime koje nije u proverenom spisku ostaje prazno, zajedno sa zarezom. Prazna personalizacija briše ceo red. Potpis se dodaje automatski iz grupe, a ako ga grupa nema, iz mailboxa.
             </p>
 
             {draft.steps.map((s) => {
