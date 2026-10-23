@@ -1,6 +1,3 @@
--- Dnevni interni izveštaj o odbijenim mejlovima: radnim danima u 16:30 UTC, posle svih prozora slanja
--- (Srbija i Švedska 8–11, SAD 8–11 po Čikagu). Mejl ide samo ako je bilo odbijenih ili pauze.
-
 create or replace function outreach.dispatch_report()
 returns void
 language plpgsql security definer set search_path = '' as $$

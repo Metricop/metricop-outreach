@@ -1,7 +1,3 @@
--- Svakog radnog dana u 05:00 UTC (pre jutarnjeg prozora 8–11) uključuje nove kontakte:
--- Srbija i Švedska dopunjuju se do 10 „new“ iz reda „ČEKA RED“,
--- SAD po datumu „start DD.MM.YYYY“ u napomeni. IZBAČENO i PROVERITI se nikad ne uključuju.
-
 create or replace function outreach.activate_daily(per_group int default 10)
 returns table(group_code text, company text)
 language plpgsql security definer set search_path = outreach, public as $$
@@ -34,7 +30,3 @@ begin
     and to_date(substring(c.notes from 'start (\d{2}\.\d{2}\.\d{4})'), 'DD.MM.YYYY') <= (now() at time zone 'America/Chicago')::date
   returning g.code, c.company;
 end $$;
-
-revoke all on function outreach.activate_daily(int) from public, anon, authenticated;
-
-select cron.schedule('outreach-activate-daily', '0 5 * * 1-5', $$select outreach.activate_daily(10)$$);
