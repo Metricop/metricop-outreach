@@ -47,7 +47,7 @@ async function checkTenders(admin: Admin) {
   }
   const { data: pending } = await admin
     .from("tenders")
-    .select("publication_number, country, published_on, buyer, title, notice_type, cpv, deadline, url")
+    .select("publication_number, country, published_on, buyer, title, notice_type, cpv, deadline, url, fit, fit_note")
     .is("notified_at", null)
     .order("published_on");
   const digest = buildTenderDigest(localDate(new Date(), "Europe/Belgrade"), (pending ?? []) as Tender[]);

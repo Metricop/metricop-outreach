@@ -2,6 +2,8 @@
 // pretražujemo evropsku bazu TED i javljamo nove objave mejlom. Elemtech AB (Švedska) konkuriše u celoj EU:
 // za EU se prate otvoreni tenderi po CPV kodu i skeneri po ključnim rečima, za Švedsku još i ključne reči, najave i dodele ugovora.
 
+import { tenderFit } from "./tenderFit.ts";
+
 export const TED_SEARCH_URL = "https://api.ted.europa.eu/v3/notices/search";
 
 /** CPV: instrumenti za premer (38290000), oprema za premer (38296000), teodoliti (38294000), merni instrumenti za premer (38295000). */
@@ -49,6 +51,7 @@ export const TED_FIELDS = [
   "classification-cpv",
   "notice-type",
   "deadline-receipt-tender-date-lot",
+  "description-lot",
 ];
 
 // TED za FT~(a OR b) vraća nula rezultata, pa svaka reč dobija svoj FT~.
@@ -72,6 +75,9 @@ export interface Tender {
   cpv: string | null;
   deadline: string | null;
   url: string;
+  /** Procena uklapanja u našu ponudu, 5–95 (tenderFit); null za objave sačuvane pre procene. */
+  fit: number | null;
+  fit_note: string | null;
 }
 
 const pick = (v: unknown): string | null => {
@@ -95,21 +101,38 @@ const titleFor = (v: unknown, country: string | null): string | null => {
 
 const day = (s: string | null) => (s ? s.slice(0, 10) : null);
 
+/** Svi tekstovi jednog polja (svi jezici, svi lotovi), za procenu uklapanja. */
+const allText = (v: unknown): string[] => {
+  if (v == null) return [];
+  if (typeof v === "string") return [v];
+  if (Array.isArray(v)) return v.flatMap(allText);
+  if (typeof v === "object") return Object.values(v as Record<string, unknown>).flatMap(allText);
+  return [String(v)];
+};
+
+/** TED naslov je "Zemlja – CPV naziv – naslov naručioca"; za procenu treba samo naslov naručioca. */
+const ownTitle = (s: string) => s.split(" – ").slice(2).join(" – ") || s;
+
 // deno-lint-ignore no-explicit-any
 export function parseNotices(body: any): Tender[] {
   return (body?.notices ?? []).map((n: Record<string, unknown>) => {
     const no = String(n["publication-number"]);
+    const cpv = pick(n["classification-cpv"]);
+    const title = titleFor(n["notice-title"], pick(n["buyer-country"])) ?? "(bez naslova)";
+    const fit = tenderFit([ownTitle(title), ...allText(n["description-lot"])].join(" \n "), cpv);
     return {
       publication_number: no,
       country: pick(n["buyer-country"]),
       published_on: day(pick(n["publication-date"]))!,
       buyer: pick(n["buyer-name"]),
       // TED prevodi naslov na sve jezike: švedski za Švedsku, engleski za ostale zemlje.
-      title: titleFor(n["notice-title"], pick(n["buyer-country"])) ?? "(bez naslova)",
+      title,
       notice_type: String(n["notice-type"] ?? ""),
-      cpv: pick(n["classification-cpv"]),
+      cpv,
       deadline: day(pick(n["deadline-receipt-tender-date-lot"])),
       url: `https://ted.europa.eu/sv/notice/-/detail/${no}`,
+      fit: fit.score,
+      fit_note: fit.note,
     };
   });
 }
@@ -127,36 +150,52 @@ const COUNTRY: Record<string, string> = {
 };
 const countryName = (c: string | null) => (c ? (COUNTRY[c] ?? c) : "?");
 
-/** Nedeljni mejl, ili null ako nema novih objava. Otvoreni tenderi po zemljama, Švedska prva. */
+/** Pragovi za grupe u mejlu. */
+export const FIT_GOOD = 60;
+export const FIT_MAYBE = 25;
+
+/** Procena iz baze; starije objave bez procene dobijaju je iz naslova. */
+const fitOf = (t: Tender) =>
+  t.fit != null ? { score: t.fit, note: t.fit_note } : tenderFit(ownTitle(t.title), t.cpv);
+
+/** Nedeljni mejl, ili null ako nema novih objava. Otvoreni tenderi po proceni uklapanja, najbolji prvi. */
 export function buildTenderDigest(date: string, tenders: Tender[]): { subject: string; text: string } | null {
   if (!tenders.length) return null;
-  const line = (t: Tender) =>
-    [
-      `- ${t.buyer ?? "?"}: ${t.title}`,
-      `  Objavljeno ${t.published_on}${t.deadline ? `, rok za ponudu ${t.deadline}` : ""}`,
+  const line = (t: Tender) => {
+    const f = fitOf(t);
+    return [
+      `- [${f.score}%] ${countryName(t.country)}, ${t.buyer ?? "?"}: ${ownTitle(t.title)}`,
+      `  ${f.note}`,
+      `  Objavljeno ${t.published_on}${t.deadline ? `, rok ${t.deadline}` : ""}`,
       `  ${t.url}`,
     ].join("\n");
-  const open = tenders.filter((t) => !isAward(t) && !isPrior(t));
-  const prior = tenders.filter(isPrior);
+  };
+  const short = (t: Tender) => `- [${fitOf(t).score}%] ${countryName(t.country)}, ${t.buyer ?? "?"}: ${ownTitle(t.title)}\n  ${t.url}`;
+  const byFit = (a: Tender, b: Tender) =>
+    fitOf(b).score - fitOf(a).score || (a.country === "SWE" ? -1 : b.country === "SWE" ? 1 : 0);
+  const open = tenders.filter((t) => !isAward(t) && !isPrior(t)).sort(byFit);
+  const prior = tenders.filter(isPrior).sort(byFit);
   const awards = tenders.filter(isAward);
-  const byCountry = new Map<string, Tender[]>();
-  for (const t of open) byCountry.set(countryName(t.country), [...(byCountry.get(countryName(t.country)) ?? []), t]);
-  const countries = [...byCountry.keys()].sort((a, b) => (a === "Švedska" ? -1 : b === "Švedska" ? 1 : a.localeCompare(b, "sr")));
+  const good = open.filter((t) => fitOf(t).score >= FIT_GOOD);
+  const maybe = open.filter((t) => fitOf(t).score >= FIT_MAYBE && fitOf(t).score < FIT_GOOD);
+  const weak = open.filter((t) => fitOf(t).score < FIT_MAYBE);
 
-  const parts = [`Nove objave za mernu opremu i pribor u bazi TED (${date}).`];
-  if (open.length) {
-    parts.push("", `OTVORENI TENDERI (${open.length}):`);
-    for (const c of countries) parts.push("", `${c} (${byCountry.get(c)!.length}):`, ...byCountry.get(c)!.map(line));
-  }
+  const parts = [
+    `Nove objave za geodetsku opremu, skenere i pribor u bazi TED (${date}).`,
+    "Procenat je gruba procena iz naslova i opisa: koliko tražena roba odgovara našoj ponudi. Konačnu ocenu dajem posle čitanja dokumentacije.",
+  ];
+  if (good.length) parts.push("", `DOBRE ŠANSE, ${FIT_GOOD}% i više (${good.length}):`, ...good.map(line));
+  if (maybe.length) parts.push("", `MOGUĆE, PROVERITI (${maybe.length}):`, ...maybe.map(line));
+  if (weak.length) parts.push("", `SLABO SE UKLAPA, samo da znamo da postoje (${weak.length}):`, ...weak.map(short));
   if (prior.length) parts.push("", `ŠVEDSKA, NAJAVE I UPITI ZA INFORMACIJE (${prior.length}):`, ...prior.map(line));
-  if (awards.length) parts.push("", `ŠVEDSKA, DODELJENI UGOVORI, za praćenje konkurencije i obnove (${awards.length}):`, ...awards.map(line));
+  if (awards.length) parts.push("", `ŠVEDSKA, DODELJENI UGOVORI, za praćenje konkurencije i obnove (${awards.length}):`, ...awards.map(short));
   parts.push(
     "",
     "Ako neki tender odgovara našoj ponudi, pošalji link u projekat i pripremam analizu i ponudu na jeziku tendera.",
     "TED ima samo veće nabavke; male nabavke švedskih kommuna stižu preko švedskih portala.",
   );
-  const subject = open.length
-    ? `[Tenderi EU] ${open.length} ${open.length === 1 ? "otvoren tender" : "otvorenih tendera"} za mernu opremu`
-    : `[Tenderi EU] ${tenders.length} ${tenders.length === 1 ? "nova objava" : "novih objava"} za mernu opremu`;
+  const subject = good.length
+    ? `[Tenderi EU] Dobre šanse: ${good.length}, ukupno novih objava: ${tenders.length}`
+    : `[Tenderi EU] ${tenders.length} ${tenders.length === 1 ? "nova objava" : "novih objava"} za geodetsku opremu`;
   return { subject, text: parts.join("\n") };
 }
