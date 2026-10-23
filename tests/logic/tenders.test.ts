@@ -15,10 +15,12 @@ const notice = (no: string, type: string, deadline?: string) => ({
 describe("tedQuery", () => {
   it("cela EU po CPV-u, Švedska još i po ključnim rečima", () => {
     const q = tedQuery("20261019");
-    expect(q).toContain("(notice-type IN (cn-standard cn-social) AND classification-cpv IN");
+    expect(q).toContain("(notice-type IN (cn-standard cn-social) AND (classification-cpv IN");
     expect(q).toContain("buyer-country=SWE");
     expect(q).toContain("38296000");
-    expect(q).toContain('"geodetisk mätutrustning"');
+    expect(q).toContain('FT~"geodetisk mätutrustning"');
+    expect(q).toContain("FT~laserscanner OR ");
+    expect(q).not.toContain("FT~(");
     expect(q).toContain("publication-date>=20261019");
   });
 });

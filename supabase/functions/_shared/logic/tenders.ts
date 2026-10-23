@@ -1,6 +1,6 @@
 // Praćenje tendera za mernu opremu (Nikola, 23.10.2026): kommuner ne odgovaraju na cold mejl, pa jednom nedeljno
 // pretražujemo evropsku bazu TED i javljamo nove objave mejlom. Elemtech AB (Švedska) konkuriše u celoj EU:
-// za EU se prate otvoreni tenderi po CPV kodu, za Švedsku još i ključne reči, najave i dodele ugovora.
+// za EU se prate otvoreni tenderi po CPV kodu i skeneri po ključnim rečima, za Švedsku još i ključne reči, najave i dodele ugovora.
 
 export const TED_SEARCH_URL = "https://api.ted.europa.eu/v3/notices/search";
 
@@ -19,9 +19,22 @@ const KEYWORDS = [
   '"geodetisk utrustning"',
   '"geodetiska mätinstrument"',
   // Lantmäteriet je 2026. tender "Geodetisk mätutrustning med tillhörande systemlösningar" objavio pod CPV 51000000/38300000.
-  "geodetisk",
-  "geodetiska",
+  // Same reči "geodetisk" i "geodetiska" donose uglavnom usluge merenja, pa ostaju samo izrazi za opremu.
   '"geodetisk mätutrustning"',
+];
+/** Skeneri i mobile mapping u celoj EU: često nose CPV za softver ili usluge, pa ih CPV ne hvata. */
+const SCANNER_KEYWORDS = [
+  "laserscanner",
+  "laserscanners",
+  "laserskanner",
+  '"laser scanner"',
+  '"laser scanners"',
+  '"scanner laser"',
+  '"scanners laser"',
+  '"skaner laserowy"',
+  '"3D scanner"',
+  '"mobile mapping"',
+  "Mobile-Mapping-System",
 ];
 /** Otvoreni pozivi za ponude. */
 const OPEN_TYPES = ["cn-standard", "cn-social"];
@@ -38,11 +51,14 @@ export const TED_FIELDS = [
   "deadline-receipt-tender-date-lot",
 ];
 
+// TED za FT~(a OR b) vraća nula rezultata, pa svaka reč dobija svoj FT~.
+const anyText = (words: string[]) => words.map((w) => `FT~${w}`).join(" OR ");
+
 /** sinceYmd u obliku 20261019. */
 export function tedQuery(sinceYmd: string): string {
   const cpv = `classification-cpv IN (${CPV.join(" ")})`;
-  const eu = `(notice-type IN (${OPEN_TYPES.join(" ")}) AND ${cpv})`;
-  const se = `(buyer-country=SWE AND notice-type IN (${SE_TYPES.join(" ")}) AND (${cpv} OR FT~(${KEYWORDS.join(" OR ")})))`;
+  const eu = `(notice-type IN (${OPEN_TYPES.join(" ")}) AND (${cpv} OR ${anyText(SCANNER_KEYWORDS)}))`;
+  const se = `(buyer-country=SWE AND notice-type IN (${SE_TYPES.join(" ")}) AND (${cpv} OR ${anyText(KEYWORDS)}))`;
   return `(${eu} OR ${se}) AND publication-date>=${sinceYmd}`;
 }
 
