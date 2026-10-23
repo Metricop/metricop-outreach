@@ -1,8 +1,9 @@
 -- Švedski tenderi za mernu opremu iz baze TED (Nikola, 23.10.2026): kommuner ne dobijaju cold mejl,
--- nego pratimo njihove nabavke. Ponedeljkom u 06:00 UTC funkcija tenders čuva nove objave i šalje mejl.
+-- nego pratimo njihove nabavke; od istog dana i otvorene tendere u celoj EU (Elemtech AB konkuriše u EU). Ponedeljkom u 06:00 UTC funkcija tenders čuva nove objave i šalje mejl.
 
 create table outreach.tenders (
   publication_number text primary key,
+  country            text,
   published_on       date not null,
   buyer              text,
   title              text not null,

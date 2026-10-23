@@ -1,4 +1,4 @@
-// Nedeljna provera švedskih tendera za mernu opremu u bazi TED (poziva je pg_cron, zaglavlje x-cron-secret).
+// Nedeljna provera tendera za mernu opremu u EU (i švedskih najava i dodela) u bazi TED (poziva je pg_cron, zaglavlje x-cron-secret).
 // Nove objave se čuvaju u outreach.tenders i šalju Nikoli jednim internim mejlom; svaka se javlja samo jednom.
 
 import { refreshAccessToken, sendRaw } from "../_shared/gmail.ts";
@@ -47,7 +47,7 @@ async function checkTenders(admin: Admin) {
   }
   const { data: pending } = await admin
     .from("tenders")
-    .select("publication_number, published_on, buyer, title, notice_type, cpv, deadline, url")
+    .select("publication_number, country, published_on, buyer, title, notice_type, cpv, deadline, url")
     .is("notified_at", null)
     .order("published_on");
   const digest = buildTenderDigest(localDate(new Date(), "Europe/Belgrade"), (pending ?? []) as Tender[]);
