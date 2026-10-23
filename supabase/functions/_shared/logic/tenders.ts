@@ -18,6 +18,10 @@ const KEYWORDS = [
   '"laser tracker"',
   '"geodetisk utrustning"',
   '"geodetiska mätinstrument"',
+  // Lantmäteriet je 2026. tender "Geodetisk mätutrustning med tillhörande systemlösningar" objavio pod CPV 51000000/38300000.
+  "geodetisk",
+  "geodetiska",
+  '"geodetisk mätutrustning"',
 ];
 /** Otvoreni pozivi za ponude. */
 const OPEN_TYPES = ["cn-standard", "cn-social"];

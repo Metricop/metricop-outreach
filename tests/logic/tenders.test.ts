@@ -18,6 +18,7 @@ describe("tedQuery", () => {
     expect(q).toContain("(notice-type IN (cn-standard cn-social) AND classification-cpv IN");
     expect(q).toContain("buyer-country=SWE");
     expect(q).toContain("38296000");
+    expect(q).toContain('"geodetisk mätutrustning"');
     expect(q).toContain("publication-date>=20261019");
   });
 });
