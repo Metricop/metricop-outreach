@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button, Drawer, Field, Notice, inputClass } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
-import { TIMEZONE_OPTIONS, type Group, type MailboxOption, type SequenceOption } from "@/lib/types";
+import { COUNTRY_OPTIONS, TIMEZONE_OPTIONS, type Group, type MailboxOption, type SequenceOption } from "@/lib/types";
 
 type Draft = Omit<Group, "id"> & { id?: string };
 
@@ -19,6 +19,8 @@ const EMPTY: Draft = {
   timezone: null,
   send_hour_from: null,
   send_hour_to: null,
+  country_code: null,
+  daily_new_quota: null,
 };
 
 async function fetchGroupsData() {
@@ -91,6 +93,8 @@ export function GroupsManager() {
       timezone: draft.timezone || null,
       send_hour_from: from,
       send_hour_to: to,
+      country_code: draft.country_code || null,
+      daily_new_quota: draft.daily_new_quota === null || String(draft.daily_new_quota) === "" ? null : Number(draft.daily_new_quota),
     };
     const res = draft.id
       ? await supabase.from("groups").update(row).eq("id", draft.id)
@@ -220,6 +224,32 @@ export function GroupsManager() {
                 onChange={(e) => setDraft({ ...draft, priority: Number(e.target.value) })}
               />
             </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Država kontakata" hint="Prazno = tržište mailboxa.">
+                <select
+                  className={inputClass}
+                  value={draft.country_code ?? ""}
+                  onChange={(e) => setDraft({ ...draft, country_code: e.target.value || null })}
+                >
+                  <option value="">— kao mailbox —</option>
+                  {COUNTRY_OPTIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Red čekanja: dnevno" hint="Svako jutro toliko kontakata iz reda postaje Novo. Prazno = bez reda.">
+                <input
+                  type="number"
+                  min={0}
+                  max={50}
+                  className={inputClass}
+                  value={draft.daily_new_quota ?? ""}
+                  onChange={(e) => setDraft({ ...draft, daily_new_quota: e.target.value === "" ? null : Number(e.target.value) })}
+                />
+              </Field>
+            </div>
             <div className="space-y-3 rounded-xl border border-border p-3">
               <p className="text-sm font-medium">Posebno za ovu grupu</p>
               <p className="text-xs text-muted">Prazno polje znači da važi isto što i za mailbox. Koristi se kad isti nalog šalje drugom tržištu, npr. SAD.</p>

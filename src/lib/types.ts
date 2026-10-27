@@ -1,4 +1,5 @@
 export const CONTACT_STATUSES = [
+  "queued",
   "new",
   "in_sequence",
   "replied",
@@ -13,6 +14,7 @@ export const CONTACT_STATUSES = [
 export type ContactStatus = (typeof CONTACT_STATUSES)[number];
 
 export const STATUS_LABELS: Record<ContactStatus, string> = {
+  queued: "U redu čekanja",
   new: "Novo",
   in_sequence: "U sekvenci",
   replied: "Odgovorio",
@@ -41,7 +43,59 @@ export interface Contact {
   last_message_id: string | null;
   notes: string | null;
   created_at: string;
+  company_id: string | null;
+  last_name: string | null;
+  title: string | null;
+  phone: string | null;
+  country_code: string | null;
+  linkedin_url: string | null;
+  external_ref: string | null;
+  tier: string | null;
+  contact_role: ContactRole | null;
+  planned_start: string | null;
+  queue_position: number | null;
+  interest_level: InterestLevel | null;
+  next_step: string | null;
+  next_contact_at: string | null;
+  lost_reason: string | null;
+  owner_email: string | null;
+  tags: string[];
+  updated_at: string;
 }
+
+export type InterestLevel = "high" | "medium" | "low";
+export const INTEREST_LABELS: Record<InterestLevel, string> = { high: "Visoka", medium: "Srednja", low: "Niska" };
+
+export type ContactRole = "primary" | "secondary";
+export const ROLE_LABELS: Record<ContactRole, string> = { primary: "Primarni", secondary: "Drugi" };
+
+/** Firma (outreach.companies). Jedna firma ima više kontakata. */
+export interface Company {
+  id: string;
+  name: string;
+  legal_form: string | null;
+  reg_no: string | null;
+  vat_id: string | null;
+  website: string | null;
+  domain: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  zip: string | null;
+  country_code: string | null;
+  description: string | null;
+  licenses: string | null;
+  segment: string | null;
+  source: string | null;
+  tags: string[];
+  owner_email: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const COUNTRY_OPTIONS = ["RS", "SE", "US", "BA", "ME", "HR", "MK", "NO", "DK", "FI", "DE"];
 
 export interface Group {
   id: string;
@@ -58,6 +112,10 @@ export interface Group {
   timezone: string | null;
   send_hour_from: number | null;
   send_hour_to: number | null;
+  /** Država kontakata u grupi; prazno = tržište mailboxa. */
+  country_code: string | null;
+  /** Jutarnje uključivanje iz reda čekanja: koliko dnevno; prazno = bez reda. */
+  daily_new_quota: number | null;
 }
 
 export type Market = "RS" | "SE" | "US";
@@ -121,6 +179,13 @@ export interface EventRow {
   type: string;
   detail: string | null;
   created_at: string;
+  created_by: string | null;
+}
+
+export function formatDate(value: string | null): string {
+  if (!value) return "—";
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value);
+  return d.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 export function formatDateTime(value: string | null): string {

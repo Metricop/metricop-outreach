@@ -1,20 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Drawer, Notice, StatusBadge, inputClass } from "@/components/ui";
-import { eventLabel } from "@/lib/events";
-import { callFunction } from "@/lib/functions";
+import { Button, Notice, StatusBadge, inputClass } from "@/components/ui";
+import { downloadText, toCsv, type CsvColumn } from "@/lib/csv";
+import { fetchAll } from "@/lib/fetchAll";
 import { MAX_PERSONALIZE } from "@/lib/personalize";
+import { ContactPanel } from "./ContactPanel";
 import { PersonalizeReview } from "./PersonalizeReview";
 import { createClient } from "@/lib/supabase/client";
 import {
   CONTACT_STATUSES,
+  INTEREST_LABELS,
   STATUS_LABELS,
+  formatDate,
   formatDateTime,
   type Contact,
   type ContactStatus,
-  type EventRow,
   type Group,
+  type InterestLevel,
 } from "@/lib/types";
 
 const PAGE_SIZE = 50;
@@ -24,6 +27,8 @@ interface Filters {
   group: string; // "" = sve, "none" = bez grupe
   status: string;
   city: string;
+  tag: string;
+  owner: string; // "" = svi, "none" = bez vlasnika
 }
 
 async function fetchContacts(filters: Filters, page: number) {
@@ -38,30 +43,108 @@ async function fetchContacts(filters: Filters, page: number) {
   else if (filters.group) query = query.eq("group_id", filters.group);
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.city) query = query.eq("city", filters.city);
-  const q = filters.q.replace(/[,()%*\\]/g, " ").trim();
-  if (q) query = query.or(`company.ilike.%${q}%,first_name.ilike.%${q}%,email.ilike.%${q}%`);
+  if (filters.tag) query = query.contains("tags", [filters.tag]);
+  if (filters.owner === "none") query = query.is("owner_email", null);
+  else if (filters.owner) query = query.eq("owner_email", filters.owner);
+  const q = cleanQuery(filters.q);
+  if (q) query = query.or(`company.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%`);
   const { data, count, error } = await query;
   return { contacts: (data ?? []) as Contact[], total: count ?? 0, error: error?.message ?? null };
 }
 
+const cleanQuery = (q: string) => q.replace(/[,()%*\\]/g, " ").trim();
+
 async function fetchLookups() {
   const supabase = createClient();
-  const [g, c] = await Promise.all([
+  const [g, c, t, m] = await Promise.all([
     supabase.from("groups").select("*").order("priority").order("code"),
     supabase.from("contact_cities").select("city"),
+    supabase.from("contact_tags").select("tag"),
+    supabase.from("team_members").select("email").order("email"),
   ]);
-  return { groups: (g.data ?? []) as Group[], cities: (c.data ?? []).map((r) => r.city as string) };
+  return {
+    groups: (g.data ?? []) as Group[],
+    cities: (c.data ?? []).map((r) => r.city as string),
+    tags: (t.data ?? []).map((r) => r.tag as string),
+    team: (m.data ?? []).map((r) => r.email as string),
+  };
 }
 
-export function ContactsBrowser() {
+/** Kolone izvoza; isti nazivi kao u pogledu crm_contacts_v1 koji čita centralni CRM. */
+interface ExportRow {
+  id: string;
+  company_id: string | null;
+  company_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  title: string | null;
+  email: string;
+  phone: string | null;
+  country_code: string | null;
+  city: string | null;
+  status: ContactStatus;
+  stage: string;
+  interest_level: InterestLevel | null;
+  next_step: string | null;
+  next_contact_at: string | null;
+  owner_email: string | null;
+  tags: string[];
+  group_code: string | null;
+  mailbox_email: string | null;
+  last_step: number;
+  first_sent_at: string | null;
+  last_sent_at: string | null;
+  replied_at: string | null;
+  external_ref: string | null;
+  tier: string | null;
+  source: string | null;
+  notes: string | null;
+}
+
+const EXPORT_COLUMNS: CsvColumn<ExportRow>[] = [
+  { header: "Firma", value: (r) => r.company_name },
+  { header: "Ime", value: (r) => r.first_name },
+  { header: "Prezime", value: (r) => r.last_name },
+  { header: "Funkcija", value: (r) => r.title },
+  { header: "Email", value: (r) => r.email },
+  { header: "Telefon", value: (r) => r.phone },
+  { header: "Država", value: (r) => r.country_code },
+  { header: "Grad", value: (r) => r.city },
+  { header: "Grupa", value: (r) => r.group_code },
+  { header: "Mailbox", value: (r) => r.mailbox_email },
+  { header: "Status", value: (r) => STATUS_LABELS[r.status] },
+  { header: "Zainteresovanost", value: (r) => (r.interest_level ? INTEREST_LABELS[r.interest_level] : null) },
+  { header: "Sledeći korak", value: (r) => r.next_step },
+  { header: "Javi se ponovo", value: (r) => r.next_contact_at },
+  { header: "Vlasnik", value: (r) => r.owner_email },
+  { header: "Oznake", value: (r) => r.tags },
+  { header: "Poslednji korak", value: (r) => r.last_step || null },
+  { header: "Prvo slanje", value: (r) => formatDate(r.first_sent_at) },
+  { header: "Poslednje slanje", value: (r) => formatDate(r.last_sent_at) },
+  { header: "Odgovor", value: (r) => formatDate(r.replied_at) },
+  { header: "Šifra", value: (r) => r.external_ref },
+  { header: "Nivo", value: (r) => r.tier },
+  { header: "Izvor", value: (r) => r.source },
+  { header: "Beleške", value: (r) => r.notes },
+  { header: "ID kontakta", value: (r) => r.id },
+  { header: "ID firme", value: (r) => r.company_id },
+];
+
+export function ContactsBrowser({ initialOpenId = null }: { initialOpenId?: string | null }) {
   const supabase = createClient();
-  const [filters, setFilters] = useState<Filters>({ q: "", group: "", status: "", city: "" });
+  const [filters, setFilters] = useState<Filters>({ q: "", group: "", status: "", city: "", tag: "", owner: "" });
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [result, setResult] = useState<{ key: string; contacts: Contact[]; total: number } | null>(null);
-  const [lookups, setLookups] = useState<{ groups: Group[]; cities: string[] }>({ groups: [], cities: [] });
+  const [lookups, setLookups] = useState<{ groups: Group[]; cities: string[]; tags: string[]; team: string[] }>({
+    groups: [],
+    cities: [],
+    tags: [],
+    team: [],
+  });
+  const [exporting, setExporting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(initialOpenId);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
@@ -71,7 +154,7 @@ export function ContactsBrowser() {
   const contacts = result?.contacts ?? [];
   const total = result?.total ?? 0;
   const loading = result?.key !== key;
-  const { groups, cities } = lookups;
+  const { groups, cities, tags, team } = lookups;
 
   // Pretraga kreće malo posle kucanja.
   useEffect(() => {
@@ -130,6 +213,47 @@ export function ContactsBrowser() {
     reload();
   }
 
+  async function bulkAddTag() {
+    const tag = prompt("Oznaka za izabrane kontakte (npr. sajam-2026):")?.trim().toLowerCase();
+    if (!tag) return;
+    const chosen = contacts.filter((c) => selected.has(c.id) && !(c.tags ?? []).includes(tag));
+    for (const c of chosen) {
+      const { error } = await supabase.from("contacts").update({ tags: [...(c.tags ?? []), tag] }).eq("id", c.id);
+      if (error) return setError(error.message);
+    }
+    setMessage(`Oznaka „${tag}” dodata: ${chosen.length}`);
+    reload();
+  }
+
+  /** Izvoz svih kontakata koji odgovaraju filterima (ne samo ove strane). */
+  async function exportCsv() {
+    setExporting(true);
+    setError(null);
+    try {
+      const code = filters.group && filters.group !== "none" ? groups.find((g) => g.id === filters.group)?.code : null;
+      const q = cleanQuery(filters.q);
+      const rows = await fetchAll<ExportRow>((from, to) => {
+        let query = supabase.from("crm_contacts_v1").select("*").order("company_name").order("email").range(from, to);
+        if (filters.group === "none") query = query.is("group_code", null);
+        else if (code) query = query.eq("group_code", code);
+        if (filters.status) query = query.eq("status", filters.status);
+        if (filters.city) query = query.eq("city", filters.city);
+        if (filters.tag) query = query.contains("tags", [filters.tag]);
+        if (filters.owner === "none") query = query.is("owner_email", null);
+        else if (filters.owner) query = query.eq("owner_email", filters.owner);
+        if (q) query = query.or(`company_name.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%`);
+        return query;
+      });
+      const date = new Date().toISOString().slice(0, 10);
+      downloadText(`outreach-kontakti-${date}.csv`, toCsv(rows, EXPORT_COLUMNS));
+      setMessage(`Izvezeno kontakata: ${rows.length}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Izvoz nije uspeo.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   async function bulkDelete() {
     const ids = [...selected];
     if (!confirm(`Trajno obrisati ${ids.length} kontakata i svu njihovu istoriju? Ovo ne može da se vrati.`)) return;
@@ -143,7 +267,7 @@ export function ContactsBrowser() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <input
           className={inputClass}
           placeholder="Pretraga: firma, ime ili email"
@@ -175,6 +299,29 @@ export function ContactsBrowser() {
             </option>
           ))}
         </select>
+        <select className={inputClass} value={filters.tag} onChange={(e) => setFilter("tag", e.target.value)}>
+          <option value="">Sve oznake</option>
+          {tags.map((t) => (
+            <option key={t} value={t}>
+              #{t}
+            </option>
+          ))}
+        </select>
+        <select className={inputClass} value={filters.owner} onChange={(e) => setFilter("owner", e.target.value)}>
+          <option value="">Svi vlasnici</option>
+          {team.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+          <option value="none">Bez vlasnika</option>
+        </select>
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={exportCsv} disabled={exporting}>
+          {exporting ? "Izvoz…" : "Izvezi u CSV (Excel)"}
+        </Button>
       </div>
 
       {error && <Notice kind="error">{error}</Notice>}
@@ -185,7 +332,10 @@ export function ContactsBrowser() {
           count={selected.size}
           groups={groups}
           onGroup={(gid) => bulkUpdate({ group_id: gid }, "Premešteno u grupu")}
+          team={team}
           onPause={() => bulkUpdate({ status: "paused" }, "Pauzirano")}
+          onOwner={(email) => bulkUpdate({ owner_email: email || null }, "Vlasnik promenjen")}
+          onTag={bulkAddTag}
           onStatus={(s) => bulkUpdate({ status: s }, `Status „${STATUS_LABELS[s]}”`)}
           onDelete={bulkDelete}
           onPersonalize={() => {
@@ -243,9 +393,15 @@ export function ContactsBrowser() {
                 </td>
                 <td className="px-3 py-3">
                   <div className="font-medium">{c.company ?? "—"}</div>
+                  {c.next_contact_at && (
+                    <div className="text-xs text-accent">Javi se: {formatDate(c.next_contact_at)}</div>
+                  )}
                   <div className="text-xs text-muted break-all sm:hidden">{c.email}</div>
                 </td>
-                <td className="hidden px-3 py-3 lg:table-cell">{c.first_name ?? "—"}</td>
+                <td className="hidden px-3 py-3 lg:table-cell">
+                  {[c.first_name, c.last_name].filter(Boolean).join(" ") || "—"}
+                  {c.title && <div className="text-xs text-muted">{c.title}</div>}
+                </td>
                 <td className="hidden px-3 py-3 break-all sm:table-cell">{c.email}</td>
                 <td className="hidden px-3 py-3 md:table-cell">{c.city ?? "—"}</td>
                 <td className="hidden px-3 py-3 md:table-cell">{groupCode(c.group_id)}</td>
@@ -288,7 +444,10 @@ export function ContactsBrowser() {
       <ContactPanel
         id={openId}
         groupCode={groupCode}
+        teamEmails={team}
         onClose={() => setOpenId(null)}
+        onChanged={reload}
+        onOpen={setOpenId}
         onDeleted={() => {
           setOpenId(null);
           setMessage("Kontakt je trajno obrisan.");
@@ -302,8 +461,11 @@ export function ContactsBrowser() {
 function BulkBar({
   count,
   groups,
+  team,
   onGroup,
   onPause,
+  onOwner,
+  onTag,
   onStatus,
   onDelete,
   onPersonalize,
@@ -311,8 +473,11 @@ function BulkBar({
 }: {
   count: number;
   groups: Group[];
+  team: string[];
   onGroup: (id: string) => void;
   onPause: () => void;
+  onOwner: (email: string) => void;
+  onTag: () => void;
   onStatus: (s: ContactStatus) => void;
   onDelete: () => void;
   onPersonalize: () => void;
@@ -347,6 +512,21 @@ function BulkBar({
           </option>
         ))}
       </select>
+      <select
+        className={`${inputClass} w-auto`}
+        value=""
+        onChange={(e) => e.target.value && onOwner(e.target.value === "none" ? "" : e.target.value)}
+        aria-label="Vlasnik"
+      >
+        <option value="">Vlasnik…</option>
+        {team.map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
+        <option value="none">Bez vlasnika</option>
+      </select>
+      <Button onClick={onTag}>Dodaj oznaku</Button>
       <Button onClick={onPersonalize}>Predloži personalizaciju</Button>
       <Button onClick={onPause}>Pauziraj</Button>
       <Button variant="danger" onClick={onDelete}>
@@ -354,159 +534,5 @@ function BulkBar({
       </Button>
       <Button onClick={onClear}>Poništi izbor</Button>
     </div>
-  );
-}
-
-function ContactPanel({
-  id,
-  groupCode,
-  onClose,
-  onDeleted,
-}: {
-  id: string | null;
-  groupCode: (id: string | null) => string;
-  onClose: () => void;
-  onDeleted: () => void;
-}) {
-  const supabase = createClient();
-  const [data, setData] = useState<{ id: string; contact: Contact | null; events: EventRow[] } | null>(null);
-  const contact = data && data.id === id ? data.contact : null;
-  const events = data && data.id === id ? data.events : [];
-
-  useEffect(() => {
-    if (!id) return;
-    let alive = true;
-    Promise.all([
-      supabase.from("contacts").select("*").eq("id", id).single(),
-      supabase.from("events").select("*").eq("contact_id", id).order("created_at", { ascending: false }),
-    ]).then(([c, e]) => {
-      if (alive) setData({ id, contact: c.data, events: e.data ?? [] });
-    });
-    return () => {
-      alive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
-  async function erase() {
-    if (!contact) return;
-    if (!confirm(`Trajno obrisati ${contact.email} i svu istoriju (GDPR)? Ovo ne može da se vrati.`)) return;
-    const { error } = await supabase.from("contacts").delete().eq("id", contact.id);
-    if (error) return alert(error.message);
-    onDeleted();
-  }
-
-  const rows: [string, string | number | null][] = contact
-    ? [
-        ["Firma", contact.company],
-        ["Ime", contact.first_name],
-        ["Email", contact.email],
-        ["Grad", contact.city],
-        ["Grupa", groupCode(contact.group_id)],
-        ["Korak", contact.step || null],
-        ["Personalizacija", contact.personalization],
-        ["Izvor", contact.source],
-        ["Poslednje slanje", formatDateTime(contact.last_sent_at)],
-        ["Sledeće slanje", formatDateTime(contact.next_send_at)],
-        ["Beleške", contact.notes],
-        ["Dodat", formatDateTime(contact.created_at)],
-      ]
-    : [];
-
-  return (
-    <Drawer open={!!id} onClose={onClose} title={contact?.company || contact?.email || "Kontakt"}>
-      {!contact ? (
-        <p className="text-sm text-muted">Učitavanje…</p>
-      ) : (
-        <div className="space-y-6">
-          <div>
-            <StatusBadge status={contact.status} />
-            <dl className="mt-4 grid grid-cols-[8.5rem_1fr] gap-x-3 gap-y-2 text-sm">
-              {rows.map(([label, value]) => (
-                <div key={label} className="contents">
-                  <dt className="text-muted">{label}</dt>
-                  <dd className="break-words whitespace-pre-line">{value ?? "—"}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-
-          <section>
-            <h3 className="mb-2 text-sm font-semibold">Istorija događaja</h3>
-            {events.length === 0 ? (
-              <p className="text-sm text-muted">Još nema događaja.</p>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {events.map((e) => (
-                  <li key={e.id} className="rounded-lg border border-border px-3 py-2">
-                    <div className="flex justify-between gap-2">
-                      <span className="font-medium">{eventLabel(e.type)}</span>
-                      <span className="text-xs text-muted">{formatDateTime(e.created_at)}</span>
-                    </div>
-                    {e.detail && <p className="mt-1 break-words text-muted">{e.detail}</p>}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section>
-            <h3 className="mb-2 text-sm font-semibold">Prepiska iz Gmaila</h3>
-            {contact.gmail_thread_id ? (
-              <ThreadView contactId={contact.id} />
-            ) : (
-              <p className="text-sm text-muted">Kontaktu još nije poslat nijedan mejl.</p>
-            )}
-          </section>
-
-          <section className="border-t border-border pt-4">
-            <Button variant="danger" onClick={erase}>
-              Trajno obriši kontakt i istoriju
-            </Button>
-            <p className="mt-2 text-xs text-muted">Za zahteve za brisanje podataka (GDPR).</p>
-          </section>
-        </div>
-      )}
-    </Drawer>
-  );
-}
-
-interface ThreadMessage {
-  id: string;
-  from: string | null;
-  subject: string | null;
-  date: string | null;
-  text: string;
-}
-
-function ThreadView({ contactId }: { contactId: string }) {
-  const [state, setState] = useState<{ id: string; messages?: ThreadMessage[]; error?: string } | null>(null);
-  const current = state?.id === contactId ? state : null;
-
-  useEffect(() => {
-    let alive = true;
-    callFunction<{ messages: ThreadMessage[] }>("run-cycle", { action: "thread", contact_id: contactId })
-      .then((r) => alive && setState({ id: contactId, messages: r.messages }))
-      .catch((e) => alive && setState({ id: contactId, error: e instanceof Error ? e.message : "Greška" }));
-    return () => {
-      alive = false;
-    };
-  }, [contactId]);
-
-  if (!current) return <p className="text-sm text-muted">Učitavanje prepiske…</p>;
-  if (current.error) return <p className="text-sm text-danger">{current.error}</p>;
-  if (!current.messages?.length) return <p className="text-sm text-muted">Nit je prazna.</p>;
-  return (
-    <ul className="space-y-2 text-sm">
-      {current.messages.map((m) => (
-        <li key={m.id} className="rounded-lg border border-border px-3 py-2">
-          <div className="flex flex-wrap justify-between gap-2 text-xs text-muted">
-            <span className="break-all">{m.from}</span>
-            <span>{formatDateTime(m.date)}</span>
-          </div>
-          <p className="mt-2 max-h-60 overflow-y-auto whitespace-pre-wrap break-words">{m.text}</p>
-        </li>
-      ))}
-    </ul>
   );
 }

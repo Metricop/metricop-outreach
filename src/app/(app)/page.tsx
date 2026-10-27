@@ -1,5 +1,7 @@
 import { PageHeader } from "@/components/PageHeader";
+import { queueFinishDate } from "@/lib/queue";
 import { createClient } from "@/lib/supabase/server";
+import { formatDate } from "@/lib/types";
 import { DailyChart, type DailyPoint } from "./DailyChart";
 import { MailboxSwitches, type MailboxSwitch } from "./MailboxSwitches";
 
@@ -26,11 +28,49 @@ interface GroupStats {
   interested: number;
 }
 
+interface QueueRow {
+  group_id: string;
+  code: string;
+  active: boolean;
+  daily_new_quota: number | null;
+  queued: number;
+  queued_by_quota: number;
+  queued_dated: number;
+  next_start: string | null;
+  last_start: string | null;
+  waiting_new: number;
+}
+
+interface Reminder {
+  id: string;
+  company: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email: string;
+  next_contact_at: string;
+  next_step: string | null;
+  owner_email: string | null;
+}
+
+const isoDate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 const rate = (num: number, den: number) => (den > 0 ? `${((num / den) * 100).toFixed(1)}%` : "—");
 
 export default async function PregledPage() {
   const supabase = await createClient();
-  const [{ data: mailboxes }, { data: connections }, { data: summary }, { data: groups }, { data: daily }] = await Promise.all([
+  const today = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Belgrade" }));
+  const inWeek = new Date(today);
+  inWeek.setDate(inWeek.getDate() + 7);
+  const [
+    { data: mailboxes },
+    { data: connections },
+    { data: summary },
+    { data: groups },
+    { data: daily },
+    { data: queue },
+    { data: reminders },
+  ] = await Promise.all([
     supabase
       .from("mailboxes")
       .select("id, email, alias_email, market, active, test_mode, test_email, paused_reason")
@@ -40,6 +80,14 @@ export default async function PregledPage() {
     supabase.from("stats_summary").select("*").single(),
     supabase.from("stats_groups").select("*").order("code"),
     supabase.from("stats_daily").select("*").order("day"),
+    supabase.from("queue_overview").select("*").gt("queued", 0).order("code"),
+    supabase
+      .from("contacts")
+      .select("id, company, first_name, last_name, email, next_contact_at, next_step, owner_email")
+      .not("next_contact_at", "is", null)
+      .lte("next_contact_at", isoDate(inWeek))
+      .order("next_contact_at")
+      .limit(30),
   ]);
   const connected = new Set((connections ?? []).map((c) => c.mailbox_id));
   const initial: MailboxSwitch[] = (mailboxes ?? []).map((m) => ({ ...m, connected: connected.has(m.id) }));
@@ -84,7 +132,79 @@ export default async function PregledPage() {
           <MailboxSwitches initial={initial} />
         </section>
 
+        {(reminders ?? []).length > 0 && (
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold">Javi se ponovo</h2>
+            <ul className="divide-y divide-border rounded-xl border border-border bg-surface text-sm">
+              {((reminders ?? []) as Reminder[]).map((r) => {
+                const late = r.next_contact_at <= isoDate(today);
+                return (
+                  <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+                    <div className="min-w-0">
+                      <a href={`/kontakti?kontakt=${r.id}`} className="font-medium hover:underline">
+                        {r.company ?? r.email}
+                      </a>
+                      <p className="text-xs text-muted">
+                        {[r.first_name, r.last_name].filter(Boolean).join(" ") || r.email}
+                        {r.next_step ? ` · ${r.next_step}` : ""}
+                        {r.owner_email ? ` · ${r.owner_email}` : ""}
+                      </p>
+                    </div>
+                    <span className={`text-xs font-medium ${late ? "text-danger" : "text-muted"}`}>
+                      {late ? "Danas ili kasni: " : ""}
+                      {formatDate(r.next_contact_at)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
         <DailyChart data={(daily ?? []) as DailyPoint[]} />
+
+        {(queue ?? []).length > 0 && (
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold">Red čekanja</h2>
+            <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-border text-xs text-muted">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Grupa</th>
+                    <th className="px-4 py-3 text-right font-medium">Čeka</th>
+                    <th className="px-4 py-3 font-medium">Kako se uključuju</th>
+                    <th className="px-4 py-3 font-medium">Poslednji počinje</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {((queue ?? []) as QueueRow[]).map((q) => {
+                    const finish = queueFinishDate(q.queued_by_quota, q.daily_new_quota, today);
+                    const last = [finish ? isoDate(finish) : null, q.last_start].filter(Boolean).sort().at(-1) ?? null;
+                    return (
+                      <tr key={q.group_id} className="border-b border-border last:border-0">
+                        <td className="px-4 py-3">
+                          <span className="font-medium">{q.code}</span>
+                          {!q.active && <span className="ml-2 text-xs text-muted">(neaktivna)</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">{q.queued}</td>
+                        <td className="px-4 py-3 text-xs text-muted">
+                          {q.queued_by_quota > 0 &&
+                            (q.daily_new_quota ? `${q.daily_new_quota} dnevno` : `${q.queued_by_quota} bez kvote (podesite u Grupama)`)}
+                          {q.queued_by_quota > 0 && q.queued_dated > 0 && " · "}
+                          {q.queued_dated > 0 && `${q.queued_dated} po datumu, sledeći ${formatDate(q.next_start)}`}
+                        </td>
+                        <td className="px-4 py-3">{formatDate(last)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted">
+              Svako radno jutro grupa sa kvotom dopuni kontakte „Novo“ do dnevnog broja, a kontakti sa datumom starta se uključe tog dana.
+            </p>
+          </section>
+        )}
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Po grupama</h2>

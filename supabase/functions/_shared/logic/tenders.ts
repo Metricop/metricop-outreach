@@ -114,6 +114,7 @@ const allText = (v: unknown): string[] => {
 const ownTitle = (s: string) => s.split(" – ").slice(2).join(" – ") || s;
 
 // deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function parseNotices(body: any): Tender[] {
   return (body?.notices ?? []).map((n: Record<string, unknown>) => {
     const no = String(n["publication-number"]);
