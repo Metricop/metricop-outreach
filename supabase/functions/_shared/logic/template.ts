@@ -1,4 +1,6 @@
-// Popunjavanje polja u šablonu: {{ime}}, {{firma}}, {{grad}}, {{personalizacija}}.
+// Popunjavanje polja u šablonu: {{ime}}, {{vokativ}}, {{firma}}, {{grad}}, {{personalizacija}}.
+
+import { vocative } from "./vocative.ts";
 
 export interface TemplateVars {
   ime?: string | null;
@@ -19,13 +21,14 @@ export function renderTemplate(text: string, vars: TemplateVars): string {
       .replace(new RegExp(`^.*${FIELD("personalizacija")}.*(\\n|$)`, "gim"), "")
       .replace(/\n{3,}/g, "\n\n");
   }
-  // Prazno ime uklanja i zarez ispred.
-  if (!val(vars.ime)) {
-    out = out.replace(new RegExp(`[ \\t]*,?[ \\t]*${FIELD("ime")}`, "gi"), "");
+  // Prazno ime (ili ime bez proverenog vokativa) uklanja i zarez ispred.
+  const values = { ...vars, vokativ: vocative(vars.ime) };
+  for (const key of ["ime", "vokativ"] as const) {
+    if (!val(values[key])) out = out.replace(new RegExp(`[ \\t]*,?[ \\t]*${FIELD(key)}`, "gi"), "");
   }
 
-  for (const key of ["ime", "firma", "grad", "personalizacija"] as const) {
-    out = out.replace(new RegExp(FIELD(key), "gi"), val(vars[key]));
+  for (const key of ["ime", "vokativ", "firma", "grad", "personalizacija"] as const) {
+    out = out.replace(new RegExp(FIELD(key), "gi"), val(values[key]));
   }
   return out;
 }
