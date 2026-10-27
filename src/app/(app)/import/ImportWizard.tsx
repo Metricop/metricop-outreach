@@ -22,10 +22,16 @@ import { normalizeEmail } from "@logic/email.ts";
 const FIELD_LABELS: Record<ImportField, string> = {
   company: "Firma",
   first_name: "Ime",
+  last_name: "Prezime",
+  title: "Funkcija",
   email: "Email",
+  phone: "Telefon",
   city: "Grad",
   personalization: "Personalizacija",
   source: "Izvor",
+  external_ref: "Šifra iz izvora",
+  linkedin_url: "LinkedIn",
+  tags: "Oznake (zarezom)",
 };
 
 type Phase = "upload" | "map" | "preview" | "done";
@@ -43,6 +49,7 @@ export function ImportWizard() {
   const [mapping, setMapping] = useState<Partial<Record<ImportField, number>>>({});
   const [groups, setGroups] = useState<Group[]>([]);
   const [groupId, setGroupId] = useState("");
+  const [startStatus, setStartStatus] = useState<"new" | "queued">("new");
   const [check, setCheck] = useState<ImportCheck | null>(null);
   const [report, setReport] = useState<Report | null>(null);
   const [busy, setBusy] = useState(false);
@@ -104,7 +111,14 @@ export function ImportWizard() {
         if (error) throw new Error(error.message);
         data?.forEach((d) => existing.add(d.email));
       }
-      setCheck(checkImportRows(mappedRows, existing, suppression));
+      // Postojeći kupci i odjavljeni u glavnoj aplikaciji ne dobijaju cold mejl.
+      const crmBlocked = new Map<string, string>();
+      for (const part of chunk(fileEmails, 500)) {
+        const { data, error } = await supabase.rpc("crm_blocked", { p_emails: part });
+        if (error) throw new Error(error.message);
+        (data as { email: string; reason: string }[] | null)?.forEach((d) => crmBlocked.set(d.email, d.reason));
+      }
+      setCheck(checkImportRows(mappedRows, existing, suppression, crmBlocked));
       setPhase("preview");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Provera nije uspela.");
@@ -128,11 +142,17 @@ export function ImportWizard() {
               email: r.email,
               company: r.company,
               first_name: r.first_name,
+              last_name: r.last_name,
+              title: r.title,
+              phone: r.phone,
               city: r.city,
               personalization: r.personalization,
               source: r.source,
+              external_ref: r.external_ref,
+              linkedin_url: r.linkedin_url,
+              tags: r.tags,
               group_id: groupId,
-              status: "new",
+              status: startStatus,
             })),
             { onConflict: "email", ignoreDuplicates: true },
           )
@@ -235,6 +255,15 @@ export function ImportWizard() {
               ))}
             </select>
           </Field>
+          <Field
+            label="Kada počinje slanje"
+            hint="Red čekanja: grupa sa dnevnom kvotom svako jutro uključi sledećih N kontakata (podešava se u Grupama)."
+          >
+            <select className={inputClass} value={startStatus} onChange={(e) => setStartStatus(e.target.value as "new" | "queued")}>
+              <option value="new">Odmah (status Novo)</option>
+              <option value="queued">U red čekanja</option>
+            </select>
+          </Field>
           {groups.length === 0 && (
             <Notice>
               Nema nijedne grupe. Prvo napravite grupu na ekranu{" "}
@@ -327,11 +356,12 @@ function FileGuide() {
     <div className="rounded-xl border border-border bg-surface p-5 text-sm">
       <p className="font-medium">Kako treba da izgleda fajl</p>
       <ul className="mt-2 list-disc space-y-1 pl-5 text-muted">
-        <li>Prvi red je zaglavlje: Firma, Ime, Email, Grad, Personalizacija, Izvor.</li>
+        <li>Prvi red je zaglavlje: Firma, Ime, Email, Grad, Personalizacija, Izvor. Mogu i Prezime, Funkcija, Telefon, LinkedIn, Šifra i Oznake.</li>
         <li>Jedan red = jedan kontakt. Email je obavezan, ostale kolone mogu biti prazne.</li>
         <li>Ime je samo ime osobe (npr. Marko). Ako ga ne znate, ostavite prazno.</li>
         <li>Personalizacija je jedna kratka rečenica za tu firmu. Prazna se ne prikazuje u mejlu.</li>
-        <li>Duplikati, neispravne adrese i adrese sa liste za izuzimanje se preskaču.</li>
+        <li>Duplikati, neispravne adrese, adrese sa liste za izuzimanje i postojeći kupci se preskaču.</li>
+        <li>Kontakti iste firme (isti domen mejla ili isti naziv) automatski se vezuju za jednu firmu.</li>
       </ul>
       <div className="mt-3 flex flex-wrap gap-2">
         <a href="/primeri/primer-kontakti.xlsx" download className="rounded-lg border border-border px-3 py-2 font-medium text-accent hover:bg-background">
@@ -382,7 +412,10 @@ function SkippedTable({ rows, title }: { rows: SkippedRow[]; title: string }) {
             <tr key={`${r.rowNumber}-${r.reason}`} className="border-t border-border">
               <td className="px-4 py-2">{r.rowNumber}</td>
               <td className="px-4 py-2 break-all">{r.email || "(prazno)"}</td>
-              <td className="px-4 py-2">{SKIP_REASON_LABELS[r.reason]}</td>
+              <td className="px-4 py-2">
+                {SKIP_REASON_LABELS[r.reason]}
+                {r.detail && <span className="block text-xs text-muted">{r.detail}</span>}
+              </td>
             </tr>
           ))}
         </tbody>

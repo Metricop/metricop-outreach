@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkImportRows, guessMapping } from "../../supabase/functions/_shared/logic/importRows.ts";
+import { checkImportRows, guessMapping, parseTags } from "../../supabase/functions/_shared/logic/importRows.ts";
 
 const suppression = { emails: new Set(["odjavljen@firma.rs"]), domains: new Set(["blokiran.rs"]) };
 
@@ -12,8 +12,38 @@ describe("checkImportRows", () => {
     );
     expect(r.skipped).toEqual([]);
     expect(r.valid).toEqual([
-      { rowNumber: 2, email: "info@geoplan.rs", company: "Geo Plan", first_name: undefined, city: "Novi Sad", personalization: undefined, source: undefined },
+      {
+        rowNumber: 2,
+        email: "info@geoplan.rs",
+        company: "Geo Plan",
+        first_name: undefined,
+        last_name: undefined,
+        title: undefined,
+        phone: undefined,
+        city: "Novi Sad",
+        personalization: undefined,
+        source: undefined,
+        external_ref: undefined,
+        linkedin_url: undefined,
+        tags: [],
+      },
     ]);
+  });
+
+  it("preskače postojeće kupce iz glavne aplikacije, sa razlogom", () => {
+    const r = checkImportRows(
+      [{ email: "nabavka@kupac.se" }, { email: "novi@firma.se", tags: "Sajam, partner; sajam" }],
+      new Set(),
+      suppression,
+      new Map([["nabavka@kupac.se", "Postojeći kupac (Kupac AB)"]]),
+    );
+    expect(r.skipped).toEqual([{ rowNumber: 2, email: "nabavka@kupac.se", reason: "crm_blocked", detail: "Postojeći kupac (Kupac AB)" }]);
+    expect(r.valid[0].tags).toEqual(["sajam", "partner"]);
+  });
+
+  it("parseTags razdvaja zarezom, tačka-zarezom i uspravnom crtom", () => {
+    expect(parseTags(" A | b; c ,, a ")).toEqual(["a", "b", "c"]);
+    expect(parseTags(undefined)).toEqual([]);
   });
 
   it("preskače neispravne, duplikate i izuzete, sa brojem reda", () => {

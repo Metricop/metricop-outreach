@@ -39,6 +39,7 @@ export function Field({ label, children, hint }: { label: string; children: Reac
 }
 
 const STATUS_COLORS: Record<ContactStatus, string> = {
+  queued: "bg-violet-50 text-violet-800",
   new: "bg-slate-100 text-slate-700",
   in_sequence: "bg-sky-50 text-sky-800",
   replied: "bg-amber-50 text-amber-800",

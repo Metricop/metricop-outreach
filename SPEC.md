@@ -45,8 +45,11 @@ Sve tabele u Supabase Postgres-u, sa Row Level Security (pristup samo prijavljen
 | `events` | id, contact_id, mailbox_id, type, detail, created_at | Dnevnik: sent_step_N, reply, bounce, auto_reply, error, finished |
 | `daily_counters` | mailbox_id, date, sent_new, sent_total | Brojanje dnevnih limita |
 | `suppression` | email ili domen, reason | Nikad ne kontaktirati (odjavljeni, bounce, ručno) |
+| `companies` | id, name, legal_form, reg_no, vat_id, website, domain, phone, email, address, city, country_code, licenses, tags, owner_email, crm_company_id | Firma; više kontakata iste firme (isti domen ili naziv) vezuje se automatski |
 
-Statusi kontakta: `new`, `in_sequence`, `replied`, `interested`, `not_interested`, `unsubscribed`, `bounced`, `finished_no_reply`, `paused`. U interfejsu se prikazuju na srpskom (Novo, U sekvenci, Odgovorio, Zainteresovan, Nije zainteresovan, Odjavljen, Bounce, Završeno bez odgovora, Pauza).
+Dodatna polja kontakta (oktobar 2026): company_id, last_name, title, phone, country_code, linkedin_url, external_ref (npr. US-0081), tier (K1–K4), contact_role, planned_start, queue_position, interest_level, next_step, next_contact_at (Javi se ponovo), lost_reason, owner_email, tags, crm_contact_id, updated_at. Grupa ima country_code i daily_new_quota (jutarnje uključivanje iz reda čekanja). Ručne aktivnosti (beleška, poziv, sastanak) i promene statusa iz aplikacije upisuju se u `events`. Veza sa centralnim CRM-om: `docs/CRM-INTEGRACIJA.md`.
+
+Statusi kontakta: `queued` (U redu čekanja), `new`, `in_sequence`, `replied`, `interested`, `not_interested`, `unsubscribed`, `bounced`, `finished_no_reply`, `paused`. U interfejsu se prikazuju na srpskom (U redu čekanja, Novo, U sekvenci, Odgovorio, Zainteresovan, Nije zainteresovan, Odjavljen, Bounce, Završeno bez odgovora, Pauza).
 
 Polja u šablonima: `{{ime}}`, `{{firma}}`, `{{grad}}`, `{{personalizacija}}`. Prazno ime uklanja i zarez ispred; prazna personalizacija uklanja ceo red.
 
@@ -90,6 +93,7 @@ Aplikacija mora da čuva reputaciju domena metricop.com, zato su ova pravila ugr
 
 - **Podrazumevani limiti:** 20 novih i 40 ukupno dnevno po mailboxu prve dve nedelje (jedan mailbox šalje dva tržišta po 10), zatim do 40 ukupno. Tvrda gornja granica u kodu: 50 dnevno po mailboxu, bez obzira na podešavanje.
 - **Bez tracking piksela i bez prepravljanja linkova.** Pratimo samo odgovore i bounce.
+- **Postojeći kupci** iz glavne aplikacije i adrese odjavljene tamo nikad ne dobijaju cold mejl (`outreach.crm_blocked`).
 - **Lista za izuzimanje** ima prednost nad svim ostalim. Odjava i bounce automatski dodaju adresu; ručno se može dodati i ceo domen.
 - **Jedna adresa nikad ne dobija dve sekvence.** Email je jedinstven u celoj bazi, bez obzira na grupu.
 - **Bounce stopa:** ako je u poslednjih 7 dana iznad 3% za mailbox, mailbox se automatski pauzira i prikazuje se upozorenje.

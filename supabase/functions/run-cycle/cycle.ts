@@ -25,6 +25,7 @@ import { dueAction, stateAfterSend, type Step } from "../_shared/logic/sequence.
 const DAY_MS = 86_400_000;
 const TIME_BUDGET_MS = 100_000; // Edge funkcija ima ograničeno vreme; ostatak ide u sledeći krug.
 const REPLY_LABEL = "Outreach/Odgovori";
+const LATE_REPLY_DAYS = 60;
 
 interface StepRow {
   sequence_id: string;
@@ -148,6 +149,16 @@ export async function runMailboxCycle(admin: Admin, mailboxId: string) {
     }
   }
 
+  // Postojeći kupci i odjavljeni u glavnoj aplikaciji ne dobijaju ni follow-up.
+  const blockedFollowups = await crmBlocked(admin, followups.map((f) => f.contact.email)).catch((e) => {
+    console.warn("Provera kupaca za follow-upove nije uspela:", e instanceof Error ? e.message : e);
+    return new Map<string, string>();
+  });
+  for (const f of followups.filter((f) => blockedFollowups.has(f.contact.email))) {
+    await stopForCrm(admin, f.contact, blockedFollowups.get(f.contact.email)!, log);
+  }
+  const allowedFollowups = followups.filter((f) => !blockedFollowups.has(f.contact.email));
+
   // 6. Limiti za ovaj krug.
   const limits = {
     dailyLimitNew: mailbox.daily_limit_new,
@@ -155,10 +166,10 @@ export async function runMailboxCycle(admin: Admin, mailboxId: string) {
     perRunLimit: mailbox.per_run_limit,
     createdAt: new Date(mailbox.created_at),
   };
-  const plan = planRun(limits, counts, now, followups.length, 1000);
+  const plan = planRun(limits, counts, now, allowedFollowups.length, 1000);
 
   // 7. Novi kontakti iz aktivnih grupa, po prioritetu grupe pa po datumu dodavanja.
-  const queue: QueueItem[] = followups.slice(0, plan.followups);
+  const queue: QueueItem[] = allowedFollowups.slice(0, plan.followups);
   const activeGroups = groups
     .filter((g) => g.active && stepsOfGroup(g.id).length > 0)
     .sort((a, b) => a.priority - b.priority);
@@ -184,12 +195,24 @@ export async function runMailboxCycle(admin: Admin, mailboxId: string) {
     ]);
     const blockedE = new Set((supE ?? []).map((s) => s.email));
     const blockedD = new Set((supD ?? []).map((s) => s.domain));
+    // Bez uspešne provere kupaca novi kontakti čekaju sledeći krug.
+    let blockedCrm: Map<string, string>;
+    try {
+      blockedCrm = await crmBlocked(admin, emails);
+    } catch (e) {
+      console.warn("Provera kupaca nije uspela, novi kontakti čekaju:", e instanceof Error ? e.message : e);
+      break;
+    }
 
     for (const c of candidates as Contact[]) {
       if (newLeft <= 0) break;
       if (blockedE.has(c.email) || blockedD.has(emailDomain(c.email))) {
         await admin.from("contacts").update({ status: "paused", notes: note(c.notes, "Preskočeno: adresa ili domen je na listi za izuzimanje.") }).eq("id", c.id);
         await log(c.id, "skipped", "Adresa ili domen je na listi za izuzimanje.");
+        continue;
+      }
+      if (blockedCrm.has(c.email)) {
+        await stopForCrm(admin, c, blockedCrm.get(c.email)!, log);
         continue;
       }
       const steps = stepsOfGroup(g.id);
@@ -259,7 +282,7 @@ type Mailbox = Record<string, any>;
 type Log = (contactId: string | null, type: string, detail: string) => PromiseLike<unknown>;
 
 /**
- * Provera odgovora: niti kontakata "U sekvenci" u kojima je stigla nova poruka.
+ * Provera odgovora: niti kontakata "U sekvenci" (i nedavno završenih ili pauziranih) u kojima je stigla nova poruka.
  * Bounce -> Bounce (adresa ide na listu za izuzimanje), pravi odgovor -> Odgovorio
  * (sekvenca staje, nit dobija labelu), automatski odgovor -> samo događaj.
  */
@@ -267,10 +290,13 @@ async function checkReplies(admin: Admin, mailbox: Mailbox, accessToken: string,
   const { data: groups } = await admin.from("groups").select("id").eq("mailbox_id", mailbox.id);
   if (!groups?.length) return { checked: 0, replies: 0, bounces: 0, autoReplies: 0 };
 
+  // I kasni odgovori: posle kraja sekvence ili pauze, do 60 dana od poslednjeg mejla.
+  const lateSince = new Date(Date.now() - LATE_REPLY_DAYS * DAY_MS).toISOString();
   const { data: contacts } = await admin
     .from("contacts")
     .select("id, email, gmail_thread_id, last_seen_message_id, notes")
-    .eq("status", "in_sequence")
+    .in("status", ["in_sequence", "finished_no_reply", "paused"])
+    .or(`status.eq.in_sequence,last_sent_at.gte.${lateSince}`)
     .in("group_id", groups.map((g) => g.id))
     .not("gmail_thread_id", "is", null)
     .limit(5000);
@@ -321,6 +347,19 @@ async function checkReplies(admin: Admin, mailbox: Mailbox, accessToken: string,
     await admin.from("contacts").update(patch).eq("id", c.id);
   }
   return stats;
+}
+
+/** Adrese koje glavna aplikacija zabranjuje (postojeći kupac, odjava), sa razlogom. */
+async function crmBlocked(admin: Admin, emails: string[]): Promise<Map<string, string>> {
+  if (!emails.length) return new Map();
+  const { data, error } = await admin.rpc("crm_blocked", { p_emails: emails });
+  if (error) throw new Error(error.message);
+  return new Map(((data ?? []) as { email: string; reason: string }[]).map((r) => [r.email, r.reason]));
+}
+
+async function stopForCrm(admin: Admin, c: Contact, reason: string, log: Log) {
+  await admin.from("contacts").update({ status: "paused", next_send_at: null, notes: note(c.notes, `IZBAČENO: ${reason}, ne slati cold mejlove`) }).eq("id", c.id);
+  await log(c.id, "skipped", reason);
 }
 
 function note(existing: string | null, line: string): string {
