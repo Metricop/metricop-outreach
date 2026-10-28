@@ -1,7 +1,6 @@
 -- Pomoćni pogledi za ekrane (oznake, red čekanja) i bezbednosne ispravke iz Supabase saveta:
 -- pogledi team_members i mailbox_connections više nisu SECURITY DEFINER i ne čitaju auth.users direktno.
 
--- Spisak oznaka za filter na ekranu Kontakti.
 create view outreach.contact_tags
 with (security_invoker = true)
 as
@@ -11,7 +10,6 @@ as
 
 grant select on outreach.contact_tags to authenticated;
 
--- Red čekanja po grupi: koliko čeka, dnevna kvota i raspon datuma starta.
 create view outreach.queue_overview
 with (security_invoker = true)
 as
@@ -32,7 +30,6 @@ as
 
 grant select on outreach.queue_overview to authenticated;
 
--- Članovi tima: funkcija sa proverom, pogled nad njom radi sa pravima korisnika.
 create or replace function outreach.team_member_list()
 returns table (email text, created_at timestamptz, last_sign_in_at timestamptz)
 language sql
@@ -48,7 +45,6 @@ $$;
 revoke all on function outreach.team_member_list() from public, anon;
 grant execute on function outreach.team_member_list() to authenticated;
 
--- Iste kolone i tipovi kao do sada, pa se pogled samo zamenjuje (bez brisanja).
 create or replace view outreach.team_members
 with (security_invoker = true)
 as
@@ -57,7 +53,6 @@ as
 
 grant select on outreach.team_members to authenticated;
 
--- Povezani Gmail nalozi (bez tokena): isto rešenje.
 create or replace function outreach.mailbox_connection_list()
 returns table (mailbox_id uuid, scopes text[], updated_at timestamptz)
 language sql
