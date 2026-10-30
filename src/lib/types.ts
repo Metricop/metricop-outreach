@@ -116,6 +116,9 @@ export interface Group {
   country_code: string | null;
   /** Jutarnje uključivanje iz reda čekanja: koliko dnevno; prazno = bez reda. */
   daily_new_quota: number | null;
+  /** Pauza slanja (npr. praznici), lokalni datumi YYYY-MM-DD, oba uključena; prazno = bez pauze. */
+  pause_from?: string | null;
+  pause_to?: string | null;
 }
 
 export type Market = "RS" | "SE" | "US";

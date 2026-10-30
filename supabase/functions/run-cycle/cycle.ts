@@ -104,11 +104,11 @@ export async function runMailboxCycle(admin: Admin, mailboxId: string) {
 
   const { data: allGroups } = await admin
     .from("groups")
-    .select("id, active, priority, sequence_id, signature, timezone, send_hour_from, send_hour_to")
+    .select("id, active, priority, sequence_id, signature, timezone, send_hour_from, send_hour_to, pause_from, pause_to")
     .eq("mailbox_id", mailboxId);
   if (!allGroups?.length) return { replies: replyCheck, skipped: "Mailbox nema dodeljenih grupa." };
 
-  // 4. Radno vreme: pon–pet, u zoni grupe (ili mailboxa ako grupa nema svoje). Van toga samo provera odgovora.
+  // 4. Radno vreme: pon–pet, u zoni grupe (ili mailboxa ako grupa nema svoje), osim dana pauze grupe. Van toga samo provera odgovora.
   const groups = allGroups.filter((g) => isWithinSendWindow(now, effectiveSendWindow(mailbox, g)));
   if (!groups.length) return { replies: replyCheck, skipped: "Van radnog vremena." };
 
