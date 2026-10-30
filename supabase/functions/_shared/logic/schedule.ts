@@ -4,6 +4,9 @@ export interface SendWindow {
   timezone: string;
   sendHourFrom: number;
   sendHourTo: number;
+  /** Pauza (npr. praznici): od–do lokalnog datuma YYYY-MM-DD, oba dana uključena. */
+  pauseFrom?: string | null;
+  pauseTo?: string | null;
 }
 
 interface LocalParts {
@@ -43,7 +46,14 @@ export function localDate(now: Date, timezone: string): string {
 }
 
 export function isWithinSendWindow(now: Date, w: SendWindow): boolean {
-  const { weekday, hour } = localParts(now, w.timezone);
+  const { weekday, hour, date } = localParts(now, w.timezone);
   if (weekday > 5) return false;
+  if (isPaused(date, w)) return false;
   return hour >= w.sendHourFrom && hour < w.sendHourTo;
+}
+
+/** Da li lokalni datum pada u pauzu grupe (ako je pauza zadata). */
+export function isPaused(date: string, w: Pick<SendWindow, "pauseFrom" | "pauseTo">): boolean {
+  if (!w.pauseFrom || !w.pauseTo) return false;
+  return date >= w.pauseFrom && date <= w.pauseTo;
 }
