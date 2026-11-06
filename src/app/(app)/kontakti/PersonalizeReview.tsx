@@ -3,12 +3,23 @@
 import { useEffect, useState } from "react";
 import { Button, Drawer, Notice, inputClass } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
-import type { Contact } from "@/lib/types";
+import type { Suggestion } from "@/lib/personalize";
+import { SEGMENTS, SEGMENT_LABELS, segmentLabel, type Contact, type Segment } from "@/lib/types";
 
 interface Row {
   contact: Contact;
   suggestion: string;
   accept: boolean;
+  companyId: string | null;
+  /** Delatnost upisana u firmi pre ovog pregleda. */
+  currentSegment: Segment | null;
+  /** Delatnost koja će biti upisana (predlog Claude-a ili ručni izbor). */
+  segment: Segment | null;
+}
+
+interface Response {
+  suggestions: Record<string, Suggestion>;
+  companies: Record<string, { company_id: string | null; segment: Segment | null }>;
 }
 
 /** Predlozi se prikazuju za odobrenje; u bazu ide samo ono što korisnik prihvati. */
@@ -37,13 +48,24 @@ export function PersonalizeReview({
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error ?? "Predlog nije uspeo.");
-        return data.suggestions as Record<string, string>;
+        return data as Response;
       })
-      .then((s) => {
+      .then(({ suggestions: s, companies }) => {
         if (!alive) return;
         setState({
           key,
-          rows: contacts.map((c) => ({ contact: c, suggestion: s[c.id] ?? "", accept: !!s[c.id] })),
+          rows: contacts.map((c) => {
+            const co = companies?.[c.id];
+            const sentence = s[c.id]?.sentence ?? "";
+            return {
+              contact: c,
+              suggestion: sentence,
+              accept: !!sentence,
+              companyId: co?.company_id ?? null,
+              currentSegment: co?.segment ?? null,
+              segment: co?.segment ?? s[c.id]?.segment ?? null,
+            };
+          }),
         });
       })
       .catch((e) => alive && setState({ key, error: e instanceof Error ? e.message : "Greška" }));
@@ -64,6 +86,15 @@ export function PersonalizeReview({
     const accepted = current.rows.filter((r) => r.accept && r.suggestion.trim());
     setSaving(true);
     const supabase = createClient();
+    // Delatnost se upisuje prva: od nje zavisi da li kontakt sme da dobije prvi mejl.
+    for (const r of current.rows) {
+      if (!r.companyId || !r.segment || r.segment === r.currentSegment) continue;
+      const { error } = await supabase.from("companies").update({ segment: r.segment }).eq("id", r.companyId);
+      if (error) {
+        setSaving(false);
+        return setState({ ...current, error: error.message });
+      }
+    }
     for (const r of accepted) {
       const { error } = await supabase.from("contacts").update({ personalization: r.suggestion.trim() }).eq("id", r.contact.id);
       if (error) {
@@ -76,6 +107,7 @@ export function PersonalizeReview({
   }
 
   const accepted = current?.rows?.filter((r) => r.accept && r.suggestion.trim()).length ?? 0;
+  const segmentChanges = current?.rows?.filter((r) => r.companyId && r.segment && r.segment !== r.currentSegment).length ?? 0;
 
   return (
     <Drawer open={!!contacts?.length} onClose={onClose} title="Predlog personalizacije (Claude)">
@@ -87,6 +119,7 @@ export function PersonalizeReview({
         <div className="space-y-4">
           <p className="text-sm text-muted">
             Predlozi se ne upisuju dok ih ne prihvatite. Prazan predlog znači da u podacima nema ništa konkretno; Claude ne izmišlja.
+            Proverite i delatnost firme: bez nje kontakt ne dobija prvi mejl u grupi koja je pisana za određenu delatnost.
           </p>
           {current.error && <Notice kind="error">{current.error}</Notice>}
           {current.rows!.map((r, i) => (
@@ -116,10 +149,30 @@ export function PersonalizeReview({
                 value={r.suggestion}
                 onChange={(e) => update(i, { suggestion: e.target.value, accept: !!e.target.value.trim() })}
               />
+              {r.companyId ? (
+                <label className="block text-xs text-muted">
+                  Delatnost firme
+                  {r.currentSegment ? ` (sada: ${segmentLabel(r.currentSegment)})` : " (nije upisana)"}
+                  <select
+                    className={`${inputClass} mt-1`}
+                    value={r.segment ?? ""}
+                    onChange={(e) => update(i, { segment: (e.target.value || null) as Segment | null })}
+                  >
+                    <option value="">— ne vidi se iz podataka —</option>
+                    {SEGMENTS.map((sg) => (
+                      <option key={sg} value={sg}>
+                        {SEGMENT_LABELS[sg]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <p className="text-xs text-muted">Kontakt nije povezan sa firmom, pa delatnost ne može da se upiše.</p>
+              )}
             </div>
           ))}
-          <Button variant="primary" onClick={save} disabled={saving || accepted === 0}>
-            {saving ? "Čuvanje…" : `Sačuvaj prihvaćene (${accepted})`}
+          <Button variant="primary" onClick={save} disabled={saving || (accepted === 0 && segmentChanges === 0)}>
+            {saving ? "Čuvanje…" : `Sačuvaj prihvaćene (${accepted})${segmentChanges ? ` i delatnost (${segmentChanges})` : ""}`}
           </Button>
         </div>
       )}

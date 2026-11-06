@@ -9,12 +9,15 @@ import {
   COUNTRY_OPTIONS,
   INTEREST_LABELS,
   ROLE_LABELS,
+  SEGMENTS,
+  SEGMENT_LABELS,
   formatDateTime,
   type Company,
   type Contact,
   type ContactRole,
   type EventRow,
   type InterestLevel,
+  type Segment,
 } from "@/lib/types";
 
 type ContactDraft = Pick<
@@ -451,8 +454,19 @@ export function ContactPanel({
                 <Field label="Licence RGZ">
                   <input className={inputClass} value={companyDraft.licenses ?? ""} onChange={(e) => setCo("licenses", e.target.value)} />
                 </Field>
-                <Field label="Segment">
-                  <input className={inputClass} value={companyDraft.segment ?? ""} onChange={(e) => setCo("segment", e.target.value)} />
+                <Field label="Delatnost" hint="Obavezno pre prvog mejla u grupi sa delatnošću.">
+                  <select
+                    className={inputClass}
+                    value={companyDraft.segment ?? ""}
+                    onChange={(e) => setCo("segment", (e.target.value || null) as Segment | null)}
+                  >
+                    <option value="">— nije proverena —</option>
+                    {SEGMENTS.map((s) => (
+                      <option key={s} value={s}>
+                        {SEGMENT_LABELS[s]}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
               </div>
               <Field label="Beleške o firmi">

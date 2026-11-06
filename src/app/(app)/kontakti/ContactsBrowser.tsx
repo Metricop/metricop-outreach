@@ -527,7 +527,7 @@ function BulkBar({
         <option value="none">Bez vlasnika</option>
       </select>
       <Button onClick={onTag}>Dodaj oznaku</Button>
-      <Button onClick={onPersonalize}>Predloži personalizaciju</Button>
+      <Button onClick={onPersonalize}>Predloži personalizaciju i delatnost</Button>
       <Button onClick={onPause}>Pauziraj</Button>
       <Button variant="danger" onClick={onDelete}>
         Obriši

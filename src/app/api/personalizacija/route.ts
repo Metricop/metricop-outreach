@@ -8,6 +8,7 @@ import {
   systemPrompt,
   userContent,
   type PersonalizeInput,
+  type Suggestion,
 } from "@/lib/personalize";
 import { isTeamEmail } from "@logic/email.ts";
 
@@ -30,9 +31,16 @@ export async function POST(request: NextRequest) {
 
   const { data: contacts, error } = await supabase
     .from("contacts")
-    .select("id, company, city, source, notes, group_id")
+    .select("id, company, city, source, notes, group_id, company_id")
     .in("id", ids);
   if (error) return fail(error.message, 500);
+
+  // Podaci firme (sajt, opis, licence) pomažu da se odredi delatnost.
+  const companyIds = [...new Set((contacts ?? []).map((c) => c.company_id).filter(Boolean))];
+  const { data: companies } = companyIds.length
+    ? await supabase.from("companies").select("id, website, description, licenses, segment").in("id", companyIds)
+    : { data: [] as { id: string; website: string | null; description: string | null; licenses: string | null; segment: string | null }[] };
+  const companyOf = (id: string | null) => (companies ?? []).find((co) => co.id === id);
 
   // Jezik predloga = jezik sekvence grupe (srpski ako grupa nema sekvencu).
   const groupIds = [...new Set((contacts ?? []).map((c) => c.group_id).filter(Boolean))];
@@ -51,11 +59,13 @@ export async function POST(request: NextRequest) {
   const byLanguage = new Map<string, PersonalizeInput[]>();
   for (const c of contacts ?? []) {
     const lang = languageOf(c.group_id);
-    byLanguage.set(lang, [...(byLanguage.get(lang) ?? []), c]);
+    const co = companyOf(c.company_id);
+    const input: PersonalizeInput = { ...c, website: co?.website, description: co?.description, licenses: co?.licenses };
+    byLanguage.set(lang, [...(byLanguage.get(lang) ?? []), input]);
   }
 
   const client = new Anthropic();
-  const suggestions: Record<string, string> = {};
+  const suggestions: Record<string, Suggestion> = {};
   try {
     for (const [language, list] of byLanguage) {
       const response = await client.beta.messages.create({
@@ -80,5 +90,9 @@ export async function POST(request: NextRequest) {
     throw e;
   }
 
-  return NextResponse.json({ suggestions });
+  // Trenutna delatnost firme, da se u pregledu vidi šta je već upisano.
+  const current = Object.fromEntries(
+    (contacts ?? []).map((c) => [c.id, { company_id: c.company_id, segment: companyOf(c.company_id)?.segment ?? null }]),
+  );
+  return NextResponse.json({ suggestions, companies: current });
 }

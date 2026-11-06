@@ -28,7 +28,12 @@ best_status, do_not_contact, created_at, updated_at`
 `company_id, company_name, first_name, last_name, title, email, phone, country_code, city, linkedin_url,
 external_ref, tier, contact_role, status, stage, do_not_contact, interest_level, next_step, next_contact_at,
 lost_reason, owner_email, tags, group_code, group_name, mailbox_email, sequence_name, last_step, source, notes,
-first_sent_at, last_sent_at, replied_at, unsubscribed_at, gmail_thread_id, crm_contact_id, created_at, updated_at`
+first_sent_at, last_sent_at, replied_at, unsubscribed_at, gmail_thread_id, crm_contact_id, created_at, updated_at,
+company_segment, group_segment`
+
+`company_segment` je delatnost firme, a `group_segment` delatnost za koju je pisana sekvenca koju kontakt dobija
+(oba: `survey`, `contractor`, `municipality`, `monitoring`, `scanning` ili prazno). Dodato 06.11.2026, da se
+rezultati kampanja vide po delatnosti.
 
 `stage` je kratka faza za CRM:
 
