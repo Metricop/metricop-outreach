@@ -6,7 +6,7 @@ import { Button, Field, Notice, inputClass } from "@/components/ui";
 import { chunk, fetchAll } from "@/lib/fetchAll";
 import { parseContactsFile, type ParsedFile } from "@/lib/parseFile";
 import { createClient } from "@/lib/supabase/client";
-import type { Group } from "@/lib/types";
+import { segmentLabel, type Group } from "@/lib/types";
 import {
   IMPORT_FIELDS,
   SKIP_REASON_LABELS,
@@ -51,6 +51,9 @@ export function ImportWizard() {
   const [groupId, setGroupId] = useState("");
   const [startStatus, setStartStatus] = useState<"new" | "queued">("new");
   const [check, setCheck] = useState<ImportCheck | null>(null);
+  // Grupa pisana za određenu delatnost: uvezeni kontakti još nemaju proverenu firmu, pa idu u red čekanja.
+  const segmentGroup = groups.find((g) => g.id === groupId && g.segment) ?? null;
+  const effectiveStatus = segmentGroup ? "queued" : startStatus;
   const [report, setReport] = useState<Report | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,7 +155,7 @@ export function ImportWizard() {
               linkedin_url: r.linkedin_url,
               tags: r.tags,
               group_id: groupId,
-              status: startStatus,
+              status: effectiveStatus,
             })),
             { onConflict: "email", ignoreDuplicates: true },
           )
@@ -259,11 +262,23 @@ export function ImportWizard() {
             label="Kada počinje slanje"
             hint="Red čekanja: grupa sa dnevnom kvotom svako jutro uključi sledećih N kontakata (podešava se u Grupama)."
           >
-            <select className={inputClass} value={startStatus} onChange={(e) => setStartStatus(e.target.value as "new" | "queued")}>
+            <select
+              className={inputClass}
+              value={effectiveStatus}
+              disabled={!!segmentGroup}
+              onChange={(e) => setStartStatus(e.target.value as "new" | "queued")}
+            >
               <option value="new">Odmah (status Novo)</option>
               <option value="queued">U red čekanja</option>
             </select>
           </Field>
+          {segmentGroup && (
+            <Notice>
+              Grupa {segmentGroup.code} je pisana za delatnost „{segmentLabel(segmentGroup.segment)}”. Kontakti idu u red čekanja i prvi
+              mejl dobijaju tek kad se proveri i upiše delatnost njihove firme (kartica kontakta ili „Predloži personalizaciju i
+              delatnost”).
+            </Notice>
+          )}
           {groups.length === 0 && (
             <Notice>
               Nema nijedne grupe. Prvo napravite grupu na ekranu{" "}

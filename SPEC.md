@@ -51,6 +51,8 @@ Dodatna polja kontakta (oktobar 2026): company_id, last_name, title, phone, coun
 
 Statusi kontakta: `queued` (U redu čekanja), `new`, `in_sequence`, `replied`, `interested`, `not_interested`, `unsubscribed`, `bounced`, `finished_no_reply`, `paused`. U interfejsu se prikazuju na srpskom (U redu čekanja, Novo, U sekvenci, Odgovorio, Zainteresovan, Nije zainteresovan, Odjavljen, Bounce, Završeno bez odgovora, Pauza).
 
+**Delatnost firme (segment), novembar 2026.** Firma ima delatnost u okviru geodezije i merenja: `survey` (geodetski biro / mätkonsult), `contractor` (izvođač sa sopstvenim merenjem), `municipality` (opština / grad), `monitoring` (monitoring, sleganje, vibracije), `scanning` (skeniranje, dronovi, 3D). Grupa može da ima delatnost za koju je pisana njena sekvenca; sva tri koraka te sekvence pišu se za tu delatnost (korak 1 informiše, koraci 2 i 3 su nenametljiva dopuna koraka 1, bez traženja i bez ponude). Pravilo: kontakt ne može da postane `new` (prvi mejl) u grupi sa delatnošću ako delatnost njegove firme nije upisana ili se ne poklapa. Pravilo važi u bazi (okidač `contacts_segment_guard`), u jutarnjem uključivanju iz reda (`activate_daily`) i u uvozu (uvoz u takvu grupu ide u red čekanja). Delatnost se upisuje na kartici firme ili kroz „Predloži personalizaciju i delatnost” (Claude predlaže, korisnik potvrđuje). Švedske grupe: SE-MAT, SE-ENT, SE-KOM, SE-MON, SE-SCAN; SE-INTRO je ugašena i drži kontakte bez proverene delatnosti.
+
 Polja u šablonima: `{{ime}}`, `{{firma}}`, `{{grad}}`, `{{personalizacija}}`. Prazno ime uklanja i zarez ispred; prazna personalizacija uklanja ceo red.
 
 ## Ekrani i funkcije
@@ -64,7 +66,7 @@ Polja u šablonima: `{{ime}}`, `{{firma}}`, `{{grad}}`, `{{personalizacija}}`. P
 5. **Odgovori.** Lista kontakata sa statusom Odgovorio, najnoviji prvi, sa izvodom odgovora. Dugmad: Zainteresovan, Nije zainteresovan, Odjavljen (odjava dodaje adresu na listu za izuzimanje) i link "Otvori u Gmailu".
 6. **Podešavanja.** Mailboxovi (povezivanje Gmail naloga preko OAuth-a, alias, potpis, limiti, radno vreme, test mod), članovi tima, lista za izuzimanje.
 
-**Personalizacija sa Claude-om.** Na ekranu Kontakti: izaberi kontakte → "Predloži personalizaciju". Server poziva Claude API sa podacima firme (naziv, grad, izvor, beleške) i vraća jednu kratku rečenicu po kontaktu. Predlozi se prikazuju za odobrenje i ne upisuju se dok ih korisnik ne prihvati. Bez izmišljanja činjenica: ako nema podataka, vrati prazno.
+**Personalizacija sa Claude-om.** Na ekranu Kontakti: izaberi kontakte → "Predloži personalizaciju i delatnost". Server poziva Claude API sa podacima firme (naziv, grad, izvor, beleške, sajt, opis, licence) i vraća jednu kratku rečenicu i predlog delatnosti po kontaktu. Predlozi se prikazuju za odobrenje i ne upisuju se dok ih korisnik ne prihvati. Bez izmišljanja činjenica: ako nema podataka, vrati prazno.
 
 ## Automatsko slanje, follow-upovi i provera odgovora
 

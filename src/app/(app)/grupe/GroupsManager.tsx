@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button, Drawer, Field, Notice, inputClass } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
-import { COUNTRY_OPTIONS, TIMEZONE_OPTIONS, type Group, type MailboxOption, type SequenceOption } from "@/lib/types";
+import { COUNTRY_OPTIONS, SEGMENTS, SEGMENT_LABELS, TIMEZONE_OPTIONS, segmentLabel, type Group, type Segment, type MailboxOption, type SequenceOption } from "@/lib/types";
 
 type Draft = Omit<Group, "id"> & { id?: string };
 
@@ -21,6 +21,7 @@ const EMPTY: Draft = {
   send_hour_to: null,
   country_code: null,
   daily_new_quota: null,
+  segment: null,
 };
 
 async function fetchGroupsData() {
@@ -95,6 +96,7 @@ export function GroupsManager() {
       send_hour_to: to,
       country_code: draft.country_code || null,
       daily_new_quota: draft.daily_new_quota === null || String(draft.daily_new_quota) === "" ? null : Number(draft.daily_new_quota),
+      segment: draft.segment || null,
     };
     const res = draft.id
       ? await supabase.from("groups").update(row).eq("id", draft.id)
@@ -137,6 +139,7 @@ export function GroupsManager() {
               <th className="px-4 py-3 font-medium">Naziv</th>
               <th className="hidden px-4 py-3 font-medium md:table-cell">Mailbox</th>
               <th className="hidden px-4 py-3 font-medium md:table-cell">Sekvenca</th>
+              <th className="hidden px-4 py-3 font-medium lg:table-cell">Delatnost</th>
               <th className="px-4 py-3 font-medium">Aktivna</th>
               <th className="hidden px-4 py-3 font-medium sm:table-cell">Prioritet</th>
               <th className="hidden px-4 py-3 font-medium sm:table-cell">Kontakata</th>
@@ -145,7 +148,7 @@ export function GroupsManager() {
           <tbody>
             {groups.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted">
+                <td colSpan={8} className="px-4 py-8 text-center text-muted">
                   Još nema grupa. Napravite prvu, npr. GEO-BG.
                 </td>
               </tr>
@@ -160,6 +163,7 @@ export function GroupsManager() {
                 <td className="px-4 py-3">{g.name}</td>
                 <td className="hidden px-4 py-3 md:table-cell">{mailboxLabel(g.mailbox_id)}</td>
                 <td className="hidden px-4 py-3 md:table-cell">{sequenceLabel(g.sequence_id)}</td>
+                <td className="hidden px-4 py-3 lg:table-cell">{g.segment ? segmentLabel(g.segment) : "sve"}</td>
                 <td className="px-4 py-3">{g.active ? "Da" : "Ne"}</td>
                 <td className="hidden px-4 py-3 sm:table-cell">{g.priority}</td>
                 <td className="hidden px-4 py-3 sm:table-cell">{counts[g.id] ?? 0}</td>
@@ -212,6 +216,23 @@ export function GroupsManager() {
                 {sequences.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name} ({s.language})
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field
+              label="Delatnost firmi"
+              hint="Za koju delatnost je pisana sekvenca. Prvi mejl dobija samo kontakt čija firma ima istu delatnost; firma bez upisane delatnosti ne dobija ništa."
+            >
+              <select
+                className={inputClass}
+                value={draft.segment ?? ""}
+                onChange={(e) => setDraft({ ...draft, segment: (e.target.value || null) as Segment | null })}
+              >
+                <option value="">— sve firme (bez provere) —</option>
+                {SEGMENTS.map((s) => (
+                  <option key={s} value={s}>
+                    {SEGMENT_LABELS[s]}
                   </option>
                 ))}
               </select>

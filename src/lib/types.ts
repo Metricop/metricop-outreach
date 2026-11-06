@@ -86,13 +86,29 @@ export interface Company {
   country_code: string | null;
   description: string | null;
   licenses: string | null;
-  segment: string | null;
+  /** Delatnost (SEGMENTS). Bez nje kontakt ne dobija prvi mejl u grupi koja ima delatnost. */
+  segment: Segment | null;
   source: string | null;
   tags: string[];
   owner_email: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Delatnost firme u okviru geodezije i merenja. Ista lista kao check u bazi (companies.segment, groups.segment). */
+export const SEGMENTS = ["survey", "contractor", "municipality", "monitoring", "scanning"] as const;
+export type Segment = (typeof SEGMENTS)[number];
+export const SEGMENT_LABELS: Record<Segment, string> = {
+  survey: "Geodetski biro / mätkonsult",
+  contractor: "Izvođač sa sopstvenim merenjem",
+  municipality: "Opština / grad",
+  monitoring: "Monitoring, sleganje, vibracije",
+  scanning: "Skeniranje, dronovi, 3D",
+};
+export function segmentLabel(s: string | null | undefined): string {
+  if (!s) return "nije upisana";
+  return (SEGMENT_LABELS as Record<string, string>)[s] ?? s;
 }
 
 export const COUNTRY_OPTIONS = ["RS", "SE", "US", "BA", "ME", "HR", "MK", "NO", "DK", "FI", "DE"];
@@ -116,6 +132,8 @@ export interface Group {
   country_code: string | null;
   /** Jutarnje uključivanje iz reda čekanja: koliko dnevno; prazno = bez reda. */
   daily_new_quota: number | null;
+  /** Delatnost za koju je pisana sekvenca. Ako je zadata, prvi mejl dobija samo firma iste delatnosti. */
+  segment: Segment | null;
 }
 
 export type Market = "RS" | "SE" | "US";

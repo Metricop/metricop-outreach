@@ -13,18 +13,32 @@ describe("personalizacija", () => {
 
   it("šalje samo naziv, grad, izvor i beleške", () => {
     const c = JSON.parse(userContent([{ id: "1", company: "Geo Plan", city: "Niš", source: null, notes: "Radi katastar" }]));
-    expect(c).toEqual([{ id: "1", naziv: "Geo Plan", grad: "Niš", izvor: "", beleske: "Radi katastar" }]);
+    expect(c).toEqual([
+      { id: "1", naziv: "Geo Plan", grad: "Niš", izvor: "", beleske: "Radi katastar", sajt: "", opis_firme: "", licence: "" },
+    ]);
+  });
+
+  it("uputstvo traži delatnost i prazno kad se ne vidi", () => {
+    const p = systemPrompt("sv");
+    for (const s of ["survey", "contractor", "municipality", "monitoring", "scanning"]) expect(p).toContain(`- ${s}:`);
+    expect(p).toContain("Ne pogađaj");
   });
 
   it("čita predloge, ignoriše nepoznate id-jeve i čisti razmake", () => {
     const text = JSON.stringify({
       suggestions: [
-        { id: "a", sentence: "  Videli smo da radite   katastar u Nišu. " },
-        { id: "x", sentence: "nije traženo" },
-        { id: "b", sentence: "" },
+        { id: "a", sentence: "  Videli smo da radite   katastar u Nišu. ", segment: "survey" },
+        { id: "x", sentence: "nije traženo", segment: "survey" },
+        { id: "b", sentence: "", segment: "" },
+        { id: "c", sentence: "Skenirate tunele.", segment: "nesto" },
       ],
     });
-    expect(parseSuggestions(text, ["a", "b", "c"])).toEqual({ a: "Videli smo da radite katastar u Nišu.", b: "", c: "" });
+    expect(parseSuggestions(text, ["a", "b", "c", "d"])).toEqual({
+      a: { sentence: "Videli smo da radite katastar u Nišu.", segment: "survey" },
+      b: { sentence: "", segment: null },
+      c: { sentence: "Skenirate tunele.", segment: null },
+      d: { sentence: "", segment: null },
+    });
   });
 
   it("neispravan JSON baca grešku", () => {
