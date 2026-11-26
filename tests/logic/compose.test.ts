@@ -94,3 +94,17 @@ describe("link sa imenom u tekstualnoj verziji", () => {
     expect(e.html).toContain('<a href="https://metricop.com/lp">the page</a>');
   });
 });
+
+describe("ime potpisnika (## red)", () => {
+  const sig = "Best regards,\n\n## **Nikola Miladinovic**\nSurveying Engineer | Founder, Metricop";
+  it("u HTML-u je ime podebljano i 17px", () => {
+    const { html } = composeEmail({ ...base, stepNo: 1, subject: "S", body: "Tekst", signature: sig });
+    expect(html).toContain('<div style="font-size:17px;font-weight:bold">Nikola Miladinovic</div>');
+    expect(html).not.toContain("##");
+  });
+  it("u tekstualnoj verziji nema ## ni zvezdica", () => {
+    const { text } = composeEmail({ ...base, stepNo: 1, subject: "S", body: "Tekst", signature: sig });
+    expect(text).toContain("\nNikola Miladinovic\nSurveying Engineer");
+    expect(text).not.toMatch(/##|\*\*/);
+  });
+});
