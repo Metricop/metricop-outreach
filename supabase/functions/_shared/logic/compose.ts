@@ -69,6 +69,8 @@ export function textToHtml(text: string): string {
 
 // Potpis podržava i malo oblikovanja: **podebljano**, red sa slikom ![logo](https://...)
 // i ceo red _iskošeno_ (sitna tamnosiva napomena, npr. odjava ispod logoa).
+// Red "## Ime Prezime" je ime potpisnika: podebljano i oko 20% veće od ostatka potpisa (17px naspram 14px).
+const NAME_LINE_RE = /^##\s+(.+)$/;
 const IMAGE_LINE_RE = /^!\[([^\]\n]*)\]\((https:\/\/[^\s)]+)\)$/;
 const NOTE_LINE_RE = /^_(.+)_$/;
 // Red adrese: slova i cifre, bez dvotačke (PIB:, Org.nr:, EIN:), plusa (telefon), @ i linka.
@@ -80,7 +82,7 @@ export function signatureToPlain(signature: string): string {
   return signature
     .split("\n")
     .filter((line) => !IMAGE_LINE_RE.test(line.trim()))
-    .map((line) => line.trim().replace(NOTE_LINE_RE, "$1"))
+    .map((line) => line.trim().replace(NOTE_LINE_RE, "$1").replace(NAME_LINE_RE, "$1"))
     .join("\n")
     .replace(BOLD_RE, "$1")
     .trim();
@@ -91,6 +93,8 @@ export function signatureToHtml(signature: string): string {
   const lines = signature.split("\n").map((line) => {
     const t = line.trim();
     if (!t) return "<br>";
+    const name = t.match(NAME_LINE_RE);
+    if (name) return `<div style="font-size:17px;font-weight:bold">${escapeHtml(name[1].replace(BOLD_RE, "$1"))}</div>`;
     const img = t.match(IMAGE_LINE_RE);
     if (img) return `<div><img src="${escapeHtml(img[2])}" alt="${escapeHtml(img[1])}" width="96" style="max-width:100%"></div>`;
     const note = t.match(NOTE_LINE_RE);
